@@ -1,6 +1,12 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcrypt";
-import prisma from "@/lib/prisma"; // your Prisma client
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import prisma from "@/lib/prisma";
+
+const SECRET = process.env.JWT_SECRET!;
+const EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +28,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // compare hashed password
+    
+    // compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return NextResponse.json(
@@ -31,9 +38,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // send user data (omit password)
-    const { id, name, role } = user;
-    return NextResponse.json({ success: true, user: { id, name, email, role } });
+    // generate JWT token
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      SECRET,
+      { expiresIn: EXPIRES_IN }
+    );
+
+    // create response and set HttpOnly cookie
+    const response = NextResponse.json({
+      success: true,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    });
+
+    response.cookies.set({
+      name: "session",
+      value: token,
+      httpOnly: true,
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return response;
   } catch (err) {
     console.error("Login error:", err);
     return NextResponse.json(

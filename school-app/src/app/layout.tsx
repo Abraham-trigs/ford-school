@@ -1,6 +1,7 @@
 // app/layout.tsx
 import "./globals.css";
 import { Poppins, Playfair_Display } from "next/font/google";
+import SessionProvider from "@/components/SessionProvider";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -15,8 +16,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata = {
-  title: "Your App",
-  description: "School Management Dashboard",
+  title: "Ford School",
+  description: "School management app",
 };
 
 export default function RootLayout({
@@ -25,8 +26,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${poppins.variable} ${playfair.variable}`}>
-      <body className="font-sans">{children}</body>
+    <html lang="en">
+      <body className={`${poppins.variable} ${playfair.variable} antialiased`}>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }

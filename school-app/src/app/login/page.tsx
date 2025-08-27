@@ -54,9 +54,7 @@ export default function LoginPage() {
 
   const containerVariants = {
     hidden: {},
-    visible: {
-      transition: { staggerChildren: 0.15 },
-    },
+    visible: { transition: { staggerChildren: 0.15 } },
   };
 
   const itemVariants = {
