@@ -1,38 +1,96 @@
-// -------------------------------
-// Prisma datasource
-// -------------------------------
-datasource db {
-  provider = "postgresql"        // or "mysql" / "sqlite" depending on your DB
-  url      = env("DATABASE_URL") // make sure DATABASE_URL is set in your .env
-}
-
-// -------------------------------
-// Prisma client generator
-// -------------------------------
 generator client {
   provider = "prisma-client-js"
 }
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-// -------------------------------
-// User table (all roles)
-// -------------------------------
 model User {
-  id         String    @id @default(cuid())
-  email      String    @unique
-  name       String
-  password   String?
-  role       UserRole
-  phone      String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  name               String
+  password           String?
+  role               UserRole
+  phone              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  createdAssignments Assignment[] @relation("CreatedByTeacher")
+  createdAttendance  Attendance[] @relation("RecordedByTeacher")
+  teacherClasses     Class[]      @relation("TeacherClasses")
+  children           Student[]    @relation("ParentChildren")
+  taughtStudents     Student[]    @relation("TeacherStudents")
+}
 
-  // Relations
-  teacherClasses    Class[]        @relation("TeacherClasses")
-  taughtStudents    Student[]      @relation("TeacherStudents")    // for Student.teacher
-  children          Student[]      @relation("ParentChildren")     // for Student.parent
-  createdAssignments Assignment[]  @relation("CreatedByTeacher")
-  createdAttendance Attendance[]    @relation("RecordedByTeacher")
+model Class {
+  id          String       @id @default(cuid())
+  name        String
+  teacherId   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  assignments Assignment[] @relation("ClassAssignments")
+  attendances Attendance[] @relation("ClassAttendances")
+  teacher     User?        @relation("TeacherClasses", fields: [teacherId], references: [id])
+  students    Student[]
+}
+
+model Student {
+  id          String       @id @default(cuid())
+  firstName   String
+  lastName    String
+  classId     String
+  teacherId   String
+  parentId    String?
+  dob         DateTime?
+  gender      String?
+  photoUrl    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  attendance  Attendance[]
+  class       Class        @relation(fields: [classId], references: [id])
+  parent      User?        @relation("ParentChildren", fields: [parentId], references: [id])
+  teacher     User         @relation("TeacherStudents", fields: [teacherId], references: [id])
+  submissions Submission[]
+}
+
+model Attendance {
+  id         String           @id @default(cuid())
+  studentId  String
+  classId    String
+  date       DateTime
+  status     AttendanceStatus
+  recordedBy String
+  note       String?
+  createdAt  DateTime         @default(now())
+  class      Class            @relation("ClassAttendances", fields: [classId], references: [id])
+  teacher    User             @relation("RecordedByTeacher", fields: [recordedBy], references: [id])
+  student    Student          @relation(fields: [studentId], references: [id])
+}
+
+model Assignment {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  classId     String
+  createdBy   String
+  dueDate     DateTime?
+  createdAt   DateTime     @default(now())
+  class       Class        @relation("ClassAssignments", fields: [classId], references: [id])
+  teacher     User         @relation("CreatedByTeacher", fields: [createdBy], references: [id])
+  submissions Submission[]
+}
+
+model Submission {
+  id           String           @id @default(cuid())
+  assignmentId String
+  studentId    String
+  submittedAt  DateTime?
+  status       SubmissionStatus
+  grade        Float?
+  feedback     String?
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id])
+  student      Student          @relation(fields: [studentId], references: [id])
 }
 
 enum UserRole {
@@ -44,101 +102,11 @@ enum UserRole {
   PROPRIETOR
 }
 
-// -------------------------------
-// Class table
-// -------------------------------
-model Class {
-  id        String   @id @default(cuid())
-  name      String
-  teacherId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  teacher  User?     @relation("TeacherClasses", fields: [teacherId], references: [id])
-  students Student[]
-  attendances Attendance[] @relation("ClassAttendances")
-  assignments Assignment[] @relation("ClassAssignments")
-}
-
-// -------------------------------
-// Student table
-// -------------------------------
-model Student {
-  id         String   @id @default(cuid())
-  firstName  String
-  lastName   String
-  classId    String
-  teacherId  String
-  parentId   String?
-  dob        DateTime?
-  gender     String?
-  photoUrl   String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  class      Class    @relation(fields: [classId], references: [id])
-  teacher    User     @relation("TeacherStudents", fields: [teacherId], references: [id])
-  parent     User?    @relation("ParentChildren", fields: [parentId], references: [id])
-  attendance Attendance[]
-  submissions Submission[]
-}
-
-// -------------------------------
-// Attendance table
-// -------------------------------
-model Attendance {
-  id         String   @id @default(cuid())
-  studentId  String
-  classId    String
-  date       DateTime
-  status     AttendanceStatus
-  recordedBy String
-  note       String?
-  createdAt  DateTime @default(now())
-
-  student    Student  @relation(fields: [studentId], references: [id])
-  class      Class    @relation("ClassAttendances", fields: [classId], references: [id])
-  teacher    User     @relation("RecordedByTeacher", fields: [recordedBy], references: [id])
-}
-
 enum AttendanceStatus {
   PRESENT
   ABSENT
   LATE
   EXCUSED
-}
-
-// -------------------------------
-// Assignment table
-// -------------------------------
-model Assignment {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  classId     String
-  createdBy   String
-  dueDate     DateTime?
-  createdAt   DateTime  @default(now())
-
-  class      Class      @relation("ClassAssignments", fields: [classId], references: [id])
-  teacher    User       @relation("CreatedByTeacher", fields: [createdBy], references: [id])
-  submissions Submission[]
-}
-
-// -------------------------------
-// Submission table
-// -------------------------------
-model Submission {
-  id            String   @id @default(cuid())
-  assignmentId  String
-  studentId     String
-  submittedAt   DateTime?
-  status        SubmissionStatus
-  grade         Float?
-  feedback      String?
-
-  assignment    Assignment @relation(fields: [assignmentId], references: [id])
-  student       Student    @relation(fields: [studentId], references: [id])
 }
 
 enum SubmissionStatus {

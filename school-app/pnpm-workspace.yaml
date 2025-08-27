@@ -3,5 +3,6 @@ ignoredBuiltDependencies:
   - unrs-resolver
 
 onlyBuiltDependencies:
+  - '@prisma/cli'
   - '@prisma/client'
   - '@prisma/engines'
