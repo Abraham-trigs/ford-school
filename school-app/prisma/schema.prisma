@@ -1,4 +1,20 @@
 // -------------------------------
+// Prisma datasource
+// -------------------------------
+datasource db {
+  provider = "postgresql"        // or "mysql" / "sqlite" depending on your DB
+  url      = env("DATABASE_URL") // make sure DATABASE_URL is set in your .env
+}
+
+// -------------------------------
+// Prisma client generator
+// -------------------------------
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+// -------------------------------
 // User table (all roles)
 // -------------------------------
 model User {
@@ -12,10 +28,11 @@ model User {
   updatedAt  DateTime  @updatedAt
 
   // Relations
-  teacherClasses  Class[]       @relation("TeacherClasses")
-  students        Student[]     @relation("ParentChildren")
-  createdAssignments Assignment[] @relation("CreatedByTeacher")
-  createdAttendance Attendance[]  @relation("RecordedByTeacher")
+  teacherClasses    Class[]        @relation("TeacherClasses")
+  taughtStudents    Student[]      @relation("TeacherStudents")    // for Student.teacher
+  children          Student[]      @relation("ParentChildren")     // for Student.parent
+  createdAssignments Assignment[]  @relation("CreatedByTeacher")
+  createdAttendance Attendance[]    @relation("RecordedByTeacher")
 }
 
 enum UserRole {
@@ -32,13 +49,15 @@ enum UserRole {
 // -------------------------------
 model Class {
   id        String   @id @default(cuid())
-  name      String   // e.g., "Class 1", "Class 2", ..., "JHS 3"
+  name      String
   teacherId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   teacher  User?     @relation("TeacherClasses", fields: [teacherId], references: [id])
   students Student[]
+  attendances Attendance[] @relation("ClassAttendances")
+  assignments Assignment[] @relation("ClassAssignments")
 }
 
 // -------------------------------
@@ -58,7 +77,7 @@ model Student {
   updatedAt  DateTime @updatedAt
 
   class      Class    @relation(fields: [classId], references: [id])
-  teacher    User     @relation(fields: [teacherId], references: [id])
+  teacher    User     @relation("TeacherStudents", fields: [teacherId], references: [id])
   parent     User?    @relation("ParentChildren", fields: [parentId], references: [id])
   attendance Attendance[]
   submissions Submission[]
@@ -73,12 +92,12 @@ model Attendance {
   classId    String
   date       DateTime
   status     AttendanceStatus
-  recordedBy String   // teacher userId
+  recordedBy String
   note       String?
   createdAt  DateTime @default(now())
 
   student    Student  @relation(fields: [studentId], references: [id])
-  class      Class    @relation(fields: [classId], references: [id])
+  class      Class    @relation("ClassAttendances", fields: [classId], references: [id])
   teacher    User     @relation("RecordedByTeacher", fields: [recordedBy], references: [id])
 }
 
@@ -97,11 +116,11 @@ model Assignment {
   title       String
   description String?
   classId     String
-  createdBy   String    // teacher
+  createdBy   String
   dueDate     DateTime?
   createdAt   DateTime  @default(now())
 
-  class      Class      @relation(fields: [classId], references: [id])
+  class      Class      @relation("ClassAssignments", fields: [classId], references: [id])
   teacher    User       @relation("CreatedByTeacher", fields: [createdBy], references: [id])
   submissions Submission[]
 }
@@ -127,9 +146,3 @@ enum SubmissionStatus {
   LATE
   MISSING
 }
-
-// -------------------------------
-// Admin, Headmaster, Proprietor
-// -------------------------------
-// These roles are handled via the User table with role = ADMIN, HEADMASTER, PROPRIETOR
-// Add additional tables for their domain-specific data if needed, e.g., finances, approvals
