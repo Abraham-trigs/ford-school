@@ -6,3 +6,4 @@ onlyBuiltDependencies:
   - '@prisma/cli'
   - '@prisma/client'
   - '@prisma/engines'
+  - bcrypt

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserRole, AttendanceStatus, SubmissionStatus } from "@prisma/client";
 import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
@@ -7,89 +7,87 @@ async function main() {
   console.log("Seeding database...");
 
   // -------------------------------
-  // 1. Create Teachers
+  // 1. Create Users by role
   // -------------------------------
-  const teachers = [];
-  for (let i = 1; i <= 3; i++) {
-    const teacher = await prisma.user.create({
+  const teachers: string[] = [];
+  const parents: string[] = [];
+  const students: string[] = [];
+  const admins: string[] = [];
+  const headmasters: string[] = [];
+  const proprietors: string[] = [];
+
+  // Helper to create a user
+  const createUser = async (role: UserRole) => {
+    const user = await prisma.user.create({
       data: {
         name: faker.person.fullName(),
         email: faker.internet.email(),
         password: "hashedpassword",
-        role: "TEACHER",
+        role,
         phone: faker.phone.number(),
       },
     });
-    teachers.push(teacher);
+    return user.id;
+  };
+
+  for (let i = 0; i < 10; i++) {
+    teachers.push(await createUser("TEACHER"));
+    parents.push(await createUser("PARENT"));
+    students.push(await createUser("STUDENT"));
+    admins.push(await createUser("ADMIN"));
+    headmasters.push(await createUser("HEADMASTER"));
+    proprietors.push(await createUser("PROPRIETOR"));
   }
 
   // -------------------------------
-  // 2. Create Parents
+  // 2. Create Classes
   // -------------------------------
-  const parents = [];
-  for (let i = 1; i <= 5; i++) {
-    const parent = await prisma.user.create({
-      data: {
-        name: faker.person.fullName(),
-        email: faker.internet.email(),
-        password: "hashedpassword",
-        role: "PARENT",
-        phone: faker.phone.number(),
-      },
-    });
-    parents.push(parent);
-  }
-
-  // -------------------------------
-  // 3. Create Classes
-  // -------------------------------
-  const classes = [];
-  for (let i = 1; i <= 3; i++) {
+  const classes: string[] = [];
+  for (let i = 0; i < 5; i++) {
     const cls = await prisma.class.create({
       data: {
-        name: `Class ${i}`,
-        teacherId: teachers[i - 1].id,
+        name: `Class ${i + 1}`,
+        teacherId: teachers[i % teachers.length],
       },
     });
-    classes.push(cls);
+    classes.push(cls.id);
   }
 
   // -------------------------------
-  // 4. Create Students
+  // 3. Assign Students to Classes
   // -------------------------------
-  const students = [];
-  for (let i = 0; i < 10; i++) {
-    const cls = classes[i % classes.length];
-    const teacher = teachers.find((t) => t.id === cls.teacherId)!;
-    const parent = parents[i % parents.length];
+  for (let studentId of students) {
+    const clsId = classes[Math.floor(Math.random() * classes.length)];
+    const teacherId = teachers[Math.floor(Math.random() * teachers.length)];
+    const parentId = parents[Math.floor(Math.random() * parents.length)];
 
-    const student = await prisma.student.create({
+    await prisma.student.create({
       data: {
+        id: studentId,
         firstName: faker.person.firstName(),
         lastName: faker.person.lastName(),
-        classId: cls.id,
-        teacherId: teacher.id,
-        parentId: parent.id,
+        classId: clsId,
+        teacherId,
+        parentId,
         dob: faker.date.birthdate({ min: 10, max: 15, mode: "age" }),
         gender: faker.helpers.arrayElement(["M", "F"]),
         photoUrl: faker.image.avatar(),
       },
     });
-    students.push(student);
   }
 
   // -------------------------------
-  // 5. Create Attendance Records
+  // 4. Create Attendance Records
   // -------------------------------
-  const statuses = ["PRESENT", "ABSENT", "LATE", "EXCUSED"] as const;
-  for (const student of students) {
+  const allStudents = await prisma.student.findMany();
+  for (const student of allStudents) {
     for (let day = 1; day <= 5; day++) {
       await prisma.attendance.create({
         data: {
           studentId: student.id,
           classId: student.classId,
           date: new Date(`2025-08-${day + 20}`),
-          status: faker.helpers.arrayElement(statuses),
+          status: faker.helpers.arrayElement(Object.values(AttendanceStatus)),
           recordedBy: student.teacherId,
           note: faker.lorem.sentence(),
         },
@@ -98,38 +96,40 @@ async function main() {
   }
 
   // -------------------------------
-  // 6. Create Assignments
+  // 5. Create Assignments
   // -------------------------------
-  const assignments = [];
-  for (const cls of classes) {
-    for (let i = 1; i <= 2; i++) {
+  const assignments: string[] = [];
+  for (const clsId of classes) {
+    for (let i = 0; i < 2; i++) {
+      const teacherId = teachers[Math.floor(Math.random() * teachers.length)];
       const assignment = await prisma.assignment.create({
         data: {
-          title: `Assignment ${i} - ${cls.name}`,
+          title: `Assignment ${i + 1} - ${clsId}`,
           description: faker.lorem.sentence(),
-          classId: cls.id,
-          createdBy: cls.teacherId!,
+          classId: clsId,
+          createdBy: teacherId,
           dueDate: faker.date.soon({ days: 10 }),
         },
       });
-      assignments.push(assignment);
+      assignments.push(assignment.id);
     }
   }
 
   // -------------------------------
-  // 7. Create Submissions
+  // 6. Create Submissions
   // -------------------------------
-  const submissionStatuses = ["SUBMITTED", "LATE", "MISSING"] as const;
+  const allStudentsData = await prisma.student.findMany();
+  const allAssignmentsData = await prisma.assignment.findMany();
 
-  for (const assignment of assignments) {
-    const clsStudents = students.filter((s) => s.classId === assignment.classId);
+  for (const assignment of allAssignmentsData) {
+    const clsStudents = allStudentsData.filter((s) => s.classId === assignment.classId);
     for (const student of clsStudents) {
       await prisma.submission.create({
         data: {
           assignmentId: assignment.id,
           studentId: student.id,
           submittedAt: faker.datatype.boolean() ? faker.date.recent() : null,
-          status: faker.helpers.arrayElement(submissionStatuses),
+          status: faker.helpers.arrayElement(Object.values(SubmissionStatus)),
           grade: faker.datatype.boolean() ? faker.number.int({ min: 50, max: 100 }) : null,
           feedback: faker.lorem.sentence(),
         },

@@ -1,3 +1,5 @@
+import NavigateToLoginButton from "@/components/NavigateToLoginButton";
+
 export default function Home() {
   return (
     <>
@@ -6,6 +8,8 @@ export default function Home() {
       <button className="bg-wine text-switch px-4 py-2 rounded">
         Get Started
       </button>
+
+      <NavigateToLoginButton />
     </>
   );
 }
