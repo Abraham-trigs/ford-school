@@ -1,10 +1,14 @@
 import { PrismaClient, UserRole, AttendanceStatus, SubmissionStatus } from "@prisma/client";
 import { faker } from "@faker-js/faker";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("Seeding database...");
+
+  // Pre-hash the password once so all seeded users share the same login password
+  const hashedPassword = await bcrypt.hash("password123", 10);
 
   // -------------------------------
   // 1. Create Users by role
@@ -22,7 +26,7 @@ async function main() {
       data: {
         name: faker.person.fullName(),
         email: faker.internet.email(),
-        password: "hashedpassword",
+        password: hashedPassword, // ✅ bcrypt hash instead of plain string
         role,
         phone: faker.phone.number(),
       },
@@ -56,7 +60,7 @@ async function main() {
   // -------------------------------
   // 3. Assign Students to Classes
   // -------------------------------
-  for (let studentId of students) {
+  for (const studentId of students) {
     const clsId = classes[Math.floor(Math.random() * classes.length)];
     const teacherId = teachers[Math.floor(Math.random() * teachers.length)];
     const parentId = parents[Math.floor(Math.random() * parents.length)];

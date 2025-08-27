@@ -40,7 +40,30 @@ export default function LoginPage() {
 
       if (data.success && data.user) {
         localStorage.setItem("user", JSON.stringify(data.user));
-        router.push("/dashboard");
+
+        // Role-based redirect
+        switch (data.user.role) {
+          case "ADMIN":
+            router.push("/admin");
+            break;
+          case "TEACHER":
+            router.push("/teacher");
+            break;
+          case "STUDENT":
+            router.push("/student");
+            break;
+          case "PARENT":
+            router.push("/parent");
+            break;
+          case "HEADMASTER":
+            router.push("/headmaster");
+            break;
+          case "PROPRIETOR":
+            router.push("/proprietor");
+            break;
+          default:
+            router.push("/login"); // fallback if role is missing
+        }
       } else {
         setError(data.message || "Invalid credentials");
       }
