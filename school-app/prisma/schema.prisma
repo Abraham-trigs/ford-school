@@ -1,0 +1,135 @@
+// -------------------------------
+// User table (all roles)
+// -------------------------------
+model User {
+  id         String    @id @default(cuid())
+  email      String    @unique
+  name       String
+  password   String?
+  role       UserRole
+  phone      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Relations
+  teacherClasses  Class[]       @relation("TeacherClasses")
+  students        Student[]     @relation("ParentChildren")
+  createdAssignments Assignment[] @relation("CreatedByTeacher")
+  createdAttendance Attendance[]  @relation("RecordedByTeacher")
+}
+
+enum UserRole {
+  TEACHER
+  PARENT
+  STUDENT
+  ADMIN
+  HEADMASTER
+  PROPRIETOR
+}
+
+// -------------------------------
+// Class table
+// -------------------------------
+model Class {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "Class 1", "Class 2", ..., "JHS 3"
+  teacherId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher  User?     @relation("TeacherClasses", fields: [teacherId], references: [id])
+  students Student[]
+}
+
+// -------------------------------
+// Student table
+// -------------------------------
+model Student {
+  id         String   @id @default(cuid())
+  firstName  String
+  lastName   String
+  classId    String
+  teacherId  String
+  parentId   String?
+  dob        DateTime?
+  gender     String?
+  photoUrl   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  class      Class    @relation(fields: [classId], references: [id])
+  teacher    User     @relation(fields: [teacherId], references: [id])
+  parent     User?    @relation("ParentChildren", fields: [parentId], references: [id])
+  attendance Attendance[]
+  submissions Submission[]
+}
+
+// -------------------------------
+// Attendance table
+// -------------------------------
+model Attendance {
+  id         String   @id @default(cuid())
+  studentId  String
+  classId    String
+  date       DateTime
+  status     AttendanceStatus
+  recordedBy String   // teacher userId
+  note       String?
+  createdAt  DateTime @default(now())
+
+  student    Student  @relation(fields: [studentId], references: [id])
+  class      Class    @relation(fields: [classId], references: [id])
+  teacher    User     @relation("RecordedByTeacher", fields: [recordedBy], references: [id])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+// -------------------------------
+// Assignment table
+// -------------------------------
+model Assignment {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  classId     String
+  createdBy   String    // teacher
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+
+  class      Class      @relation(fields: [classId], references: [id])
+  teacher    User       @relation("CreatedByTeacher", fields: [createdBy], references: [id])
+  submissions Submission[]
+}
+
+// -------------------------------
+// Submission table
+// -------------------------------
+model Submission {
+  id            String   @id @default(cuid())
+  assignmentId  String
+  studentId     String
+  submittedAt   DateTime?
+  status        SubmissionStatus
+  grade         Float?
+  feedback      String?
+
+  assignment    Assignment @relation(fields: [assignmentId], references: [id])
+  student       Student    @relation(fields: [studentId], references: [id])
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  LATE
+  MISSING
+}
+
+// -------------------------------
+// Admin, Headmaster, Proprietor
+// -------------------------------
+// These roles are handled via the User table with role = ADMIN, HEADMASTER, PROPRIETOR
+// Add additional tables for their domain-specific data if needed, e.g., finances, approvals
