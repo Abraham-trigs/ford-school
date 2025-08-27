@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HiEye, HiEyeOff } from "react-icons/hi";
 import { motion } from "framer-motion";
-import LoginButton from "@/components/LoginButton"; // your reusable login button
+import LoginButton from "@/components/LoginButton";
 
-interface LoginResponse {
-  success: boolean;
-  message?: string;
+interface SessionResponse {
+  loggedIn: boolean;
   user?: {
     id: string;
     name: string;
@@ -30,19 +29,24 @@ export default function LoginPage() {
     setError("");
 
     try {
+      // Step 1: Call login API
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      const data: LoginResponse = await res.json();
+      if (!res.ok) {
+        throw new Error("Invalid credentials");
+      }
 
-      if (data.success && data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
+      // Step 2: Confirm session
+      const sessionRes = await fetch("/api/auth/session");
+      const sessionData: SessionResponse = await sessionRes.json();
 
-        // Role-based redirect
-        switch (data.user.role) {
+      if (sessionData.loggedIn && sessionData.user) {
+        // Step 3: Role-based redirect
+        switch (sessionData.user.role) {
           case "ADMIN":
             router.push("/admin");
             break;
@@ -62,13 +66,13 @@ export default function LoginPage() {
             router.push("/proprietor");
             break;
           default:
-            router.push("/login"); // fallback if role is missing
+            router.push("/login"); // fallback
         }
       } else {
-        setError(data.message || "Invalid credentials");
+        setError("Login failed. Please try again.");
       }
-    } catch (err) {
-      setError("Login failed. Please try again.");
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
       console.error(err);
     } finally {
       setLoading(false);

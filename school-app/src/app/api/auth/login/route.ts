@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import * as jwt from "jsonwebtoken"; // ✅ fixed import
 import prisma from "@/lib/prisma";
 
 const SECRET = process.env.JWT_SECRET!;
@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    
     // compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -45,15 +44,20 @@ export async function POST(req: NextRequest) {
       { expiresIn: EXPIRES_IN }
     );
 
-    // create response and set HttpOnly cookie
+    // create response
     const response = NextResponse.json({
       success: true,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      token, // include token in response body if frontend needs it
     });
 
-    response.cookies.set({
-      name: "session",
-      value: token,
+    // attach cookie
+    response.cookies.set("session", token, {
       httpOnly: true,
       path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
