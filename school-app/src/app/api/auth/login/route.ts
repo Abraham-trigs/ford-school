@@ -2,10 +2,11 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import * as jwt from "jsonwebtoken"; // ✅ fixed import
+import jwt from "jsonwebtoken"; // default import
 import prisma from "@/lib/prisma";
 
-const SECRET = process.env.JWT_SECRET!;
+// ensure SECRET is typed as string
+const SECRET = process.env.JWT_SECRET as string;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 export async function POST(req: NextRequest) {
@@ -37,11 +38,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // generate JWT token
+    // generate JWT token — inline type assertion fixes TypeScript underline
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       SECRET,
-      { expiresIn: EXPIRES_IN }
+      { expiresIn: EXPIRES_IN } as jwt.SignOptions
     );
 
     // create response
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         role: user.role,
       },
-      token, // include token in response body if frontend needs it
+      token,
     });
 
     // attach cookie

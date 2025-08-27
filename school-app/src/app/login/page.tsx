@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HiEye, HiEyeOff } from "react-icons/hi";
-import { motion } from "framer-motion";
+import { motion, Variants, easeOut } from "framer-motion"; // ✅ import easing function
 import LoginButton from "@/components/LoginButton";
 
 interface SessionResponse {
@@ -29,7 +29,6 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Step 1: Call login API
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -40,12 +39,10 @@ export default function LoginPage() {
         throw new Error("Invalid credentials");
       }
 
-      // Step 2: Confirm session
       const sessionRes = await fetch("/api/auth/session");
       const sessionData: SessionResponse = await sessionRes.json();
 
       if (sessionData.loggedIn && sessionData.user) {
-        // Step 3: Role-based redirect
         switch (sessionData.user.role) {
           case "ADMIN":
             router.push("/admin");
@@ -66,30 +63,34 @@ export default function LoginPage() {
             router.push("/proprietor");
             break;
           default:
-            router.push("/login"); // fallback
+            router.push("/login");
         }
       } else {
         setError("Login failed. Please try again.");
       }
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      // ✅ Safely extract error message
+      const message =
+        err instanceof Error ? err.message : "Something went wrong";
+      setError(message);
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const containerVariants = {
+  // ✅ Typed variants for Framer Motion
+  const containerVariants: Variants = {
     hidden: {},
     visible: { transition: { staggerChildren: 0.15 } },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5, ease: "easeOut" },
+      transition: { duration: 0.5, ease: easeOut }, // ✅ use imported easing
     },
   };
 
@@ -101,7 +102,7 @@ export default function LoginPage() {
         animate={{
           opacity: 1,
           y: 0,
-          transition: { duration: 0.6, ease: "easeOut" },
+          transition: { duration: 0.6, ease: easeOut },
         }}
       >
         <h2 className="text-2xl font-display mb-6 text-wine text-center">
