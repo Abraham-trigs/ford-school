@@ -105,7 +105,7 @@ export default function LoginPage() {
           transition: { duration: 0.6, ease: easeOut },
         }}
       >
-        <h2 className="text-2xl font-display mb-6 text-wine text-center">
+        <h2 className="text-2xl font-display mb-6 text-wine text-center font-bold">
           Ford School Login
         </h2>
 

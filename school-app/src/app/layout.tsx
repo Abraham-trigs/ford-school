@@ -1,18 +1,13 @@
 // app/layout.tsx
 import "./globals.css";
-import { Poppins, Playfair_Display } from "next/font/google";
+import { Lexend_Deca } from "next/font/google";
 import SessionProvider from "@/components/SessionProvider";
 
-const poppins = Poppins({
+// Lexend Deca font optimized by Next.js
+const lexendDeca = Lexend_Deca({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-poppins",
-});
-
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-playfair",
+  variable: "--font-lexend",
 });
 
 export const metadata = {
@@ -27,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${poppins.variable} ${playfair.variable} antialiased`}>
+      <body className={`${lexendDeca.variable} font-sans antialiased`}>
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
