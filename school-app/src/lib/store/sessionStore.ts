@@ -4,16 +4,17 @@ interface UserSession {
   id: string;
   email: string;
   role: string;
+  name?: string; // optional since your API returns it
 }
 
 interface SessionResponse {
-  authenticated: boolean;
+  loggedIn: boolean;
   user?: UserSession | null;
 }
 
 interface SessionStore {
   user: UserSession | null;
-  authenticated: boolean;
+  loggedIn: boolean;
   loading: boolean;
   role: string | null;
 
@@ -28,7 +29,7 @@ interface SessionStore {
 
 export const useSessionStore = create<SessionStore>((set) => ({
   user: null,
-  authenticated: false,
+  loggedIn: false,
   loading: false,
   role: null,
 
@@ -38,26 +39,26 @@ export const useSessionStore = create<SessionStore>((set) => ({
       const res = await fetch("/api/auth/session");
       const data: SessionResponse = await res.json();
 
-      if (data.authenticated && data.user) {
-        set({ user: data.user, authenticated: true, role: data.user.role });
+      if (data.loggedIn && data.user) {
+        set({ user: data.user, loggedIn: true, role: data.user.role });
       } else {
-        set({ user: null, authenticated: false, role: null });
+        set({ user: null, loggedIn: false, role: null });
       }
     } catch (err) {
       console.error("fetchSession error:", err);
-      set({ user: null, authenticated: false, role: null });
+      set({ user: null, loggedIn: false, role: null });
     } finally {
       set({ loading: false });
     }
   },
 
   login: (user: UserSession) => {
-    set({ user, authenticated: true, role: user.role });
+    set({ user, loggedIn: true, role: user.role });
   },
 
   logout: () => {
     document.cookie = "session=; Max-Age=0; path=/; sameSite=lax; secure";
-    set({ user: null, authenticated: false, loading: false, role: null });
+    set({ user: null, loggedIn: false, loading: false, role: null });
   },
 
   setRole: (role: string) => {
