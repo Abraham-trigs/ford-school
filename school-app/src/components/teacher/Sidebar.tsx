@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 const links = [
   { name: "Dashboard", href: "/teacher" },
@@ -24,6 +25,24 @@ export default function Sidebar({
   mode = "desktop",
 }: SidebarProps) {
   const pathname = usePathname();
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Close sidebar when clicking outside (mobile only)
+  useEffect(() => {
+    if (mode !== "mobile" || !isOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target as Node)
+      ) {
+        onClose?.();
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, mode, onClose]);
 
   if (mode === "desktop") {
     return (
@@ -51,6 +70,7 @@ export default function Sidebar({
   // --- Mobile Sidebar ---
   return (
     <div
+      ref={sidebarRef}
       className={`md:hidden absolute right-4 top-16 z-40 w-56 bg-wine border border-light rounded shadow-lg overflow-hidden transition-all duration-300 ease-in-out transform origin-top ${
         isOpen
           ? "max-h-[1000px] p-4 scale-y-100 opacity-100"
