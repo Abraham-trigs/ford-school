@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { User, Class, Attendance, SchoolRole, AttendanceStatus } from "@/types/users";
+import type { User, Class, Attendance } from "@/types/users";
 
 // ---------------- Debounce helper ----------------
 function debounceString(fn: (arg: string) => void, delay: number) {
@@ -10,40 +10,41 @@ function debounceString(fn: (arg: string) => void, delay: number) {
   };
 }
 
-interface UserStore {
-  users: User[];
-  filteredUsers: User[];
-  classes: Class[];
-  filteredClasses: Class[];
-  attendances: Attendance[];
-  
-  // Fetch Users
-  fetchUsers: () => Promise<void>;
-  fetchUserById: (id: string) => Promise<User | undefined>;
-  searchUsers: (query: string) => void;
-  resetUsersSearch: () => void;
+interface SchoolStore {
+  // ---------------- State ----------------
+  usersMap: Record<string, User>;
+  userIds: string[];
+  totalUsers: number;
+  currentPage: number;
+  pageSize: number;
 
-  // Users CRUD
+  classesMap: Record<string, Class>;
+  classIds: string[];
+
+  attendancesMap: Record<string, Attendance>;
+  attendanceIds: string[];
+
+  // ---------------- Users ----------------
+  fetchUsers: (page?: number) => Promise<void>;
+  searchUsers: (query: string) => Promise<User[]>;
   addUser: (user: Omit<User, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
 
-  // Class Fetch & CRUD
+  // ---------------- Classes ----------------
   fetchClasses: () => Promise<void>;
-  fetchClassById: (id: string) => Promise<Class | undefined>;
-  searchClasses: (query: string) => void;
-  resetClassesSearch: () => void;
+  fetchTeacherClasses: (teacherId: string) => Promise<void>;
   addClass: (cls: Omit<Class, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateClass: (id: string, data: Partial<Class>) => Promise<void>;
   deleteClass: (id: string) => Promise<void>;
 
-  // Attendance
+  // ---------------- Attendance ----------------
   fetchAttendance: () => Promise<void>;
   addAttendance: (record: Omit<Attendance, "id" | "createdAt">) => Promise<void>;
   updateAttendance: (id: string, data: Partial<Attendance>) => Promise<void>;
   deleteAttendance: (id: string) => Promise<void>;
 
-  // Helpers for relations
+  // ---------------- Relation helpers ----------------
   getStudents: () => User[];
   getTeachers: () => User[];
   getClassesForTeacher: (teacherId: string) => Class[];
@@ -51,40 +52,44 @@ interface UserStore {
   getStudentsForClass: (classId: string) => User[];
 }
 
-export const useUserStore = create<UserStore>((set, get) => ({
-  users: [],
-  filteredUsers: [],
-  classes: [],
-  filteredClasses: [],
-  attendances: [],
+export const useSchoolStore = create<SchoolStore>((set, get) => ({
+  usersMap: {},
+  userIds: [],
+  totalUsers: 0,
+  currentPage: 1,
+  pageSize: 50,
+
+  classesMap: {},
+  classIds: [],
+
+  attendancesMap: {},
+  attendanceIds: [],
 
   // ---------------- Users ----------------
-  fetchUsers: async () => {
+  fetchUsers: async (page = 1) => {
     try {
-      const res = await fetch("/api/users");
+      const res = await fetch(`/api/users?page=${page}&limit=${get().pageSize}`);
       if (!res.ok) throw new Error("Failed to fetch users");
-      const data: User[] = await res.json();
-      set({ users: data, filteredUsers: data });
+      const data: { users: User[]; total: number } = await res.json();
+      const usersMap: Record<string, User> = {};
+      const userIds: string[] = [];
+      data.users.forEach(u => { usersMap[u.id] = u; userIds.push(u.id); });
+      set({
+        usersMap,
+        userIds,
+        totalUsers: data.total,
+        currentPage: page,
+      });
     } catch (err) {
       console.error("fetchUsers error:", err);
     }
   },
 
-  fetchUserById: async (id) => {
-    await get().fetchUsers();
-    return get().users.find(u => u.id === id);
-  },
-
-  searchUsers: debounceString((query: string) => {
-    const filtered = get().users.filter(u =>
-      u.name.toLowerCase().includes(query.toLowerCase()) ||
-      u.email.toLowerCase().includes(query.toLowerCase())
-    );
-    set({ filteredUsers: filtered });
-  }, 300),
-
-  resetUsersSearch: () => {
-    set({ filteredUsers: [...get().users] });
+  searchUsers: async (query: string) => {
+    const res = await fetch(`/api/users?search=${encodeURIComponent(query)}&limit=${get().pageSize}`);
+    if (!res.ok) throw new Error("Failed to search users");
+    const data: { users: User[]; total: number } = await res.json();
+    return data.users;
   },
 
   addUser: async (user) => {
@@ -96,10 +101,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to add user");
       const newUser: User = await res.json();
-      set({
-        users: [...get().users, newUser],
-        filteredUsers: [...get().filteredUsers, newUser],
-      });
+      set((state) => ({
+        usersMap: { ...state.usersMap, [newUser.id]: newUser },
+        userIds: [newUser.id, ...state.userIds],
+        totalUsers: state.totalUsers + 1,
+      }));
     } catch (err) {
       console.error("addUser error:", err);
     }
@@ -114,10 +120,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to update user");
       const updated: User = await res.json();
-      set({
-        users: get().users.map(u => u.id === id ? updated : u),
-        filteredUsers: get().filteredUsers.map(u => u.id === id ? updated : u),
-      });
+      set((state) => ({
+        usersMap: { ...state.usersMap, [id]: updated },
+      }));
     } catch (err) {
       console.error("updateUser error:", err);
     }
@@ -127,9 +132,13 @@ export const useUserStore = create<UserStore>((set, get) => ({
     try {
       const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete user");
-      set({
-        users: get().users.filter(u => u.id !== id),
-        filteredUsers: get().filteredUsers.filter(u => u.id !== id),
+      set((state) => {
+        const { [id]: _, ...usersMap } = state.usersMap;
+        return {
+          usersMap,
+          userIds: state.userIds.filter(uid => uid !== id),
+          totalUsers: state.totalUsers - 1,
+        };
       });
     } catch (err) {
       console.error("deleteUser error:", err);
@@ -142,26 +151,27 @@ export const useUserStore = create<UserStore>((set, get) => ({
       const res = await fetch("/api/classes");
       if (!res.ok) throw new Error("Failed to fetch classes");
       const data: Class[] = await res.json();
-      set({ classes: data, filteredClasses: data });
+      const classesMap: Record<string, Class> = {};
+      const classIds: string[] = [];
+      data.forEach(c => { classesMap[c.id] = c; classIds.push(c.id); });
+      set({ classesMap, classIds });
     } catch (err) {
       console.error("fetchClasses error:", err);
     }
   },
 
-  fetchClassById: async (id) => {
-    await get().fetchClasses();
-    return get().classes.find(c => c.id === id);
-  },
-
-  searchClasses: debounceString((query: string) => {
-    const filtered = get().classes.filter(c =>
-      c.name.toLowerCase().includes(query.toLowerCase())
-    );
-    set({ filteredClasses: filtered });
-  }, 300),
-
-  resetClassesSearch: () => {
-    set({ filteredClasses: [...get().classes] });
+  fetchTeacherClasses: async (teacherId: string) => {
+    try {
+      const res = await fetch(`/api/classes?teacherId=${teacherId}`);
+      if (!res.ok) throw new Error("Failed to fetch teacher classes");
+      const data: Class[] = await res.json();
+      const classesMap: Record<string, Class> = {};
+      const classIds: string[] = [];
+      data.forEach(c => { classesMap[c.id] = c; classIds.push(c.id); });
+      set({ classesMap, classIds });
+    } catch (err) {
+      console.error("fetchTeacherClasses error:", err);
+    }
   },
 
   addClass: async (cls) => {
@@ -173,10 +183,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to add class");
       const newClass: Class = await res.json();
-      set({
-        classes: [...get().classes, newClass],
-        filteredClasses: [...get().filteredClasses, newClass],
-      });
+      set((state) => ({
+        classesMap: { ...state.classesMap, [newClass.id]: newClass },
+        classIds: [...state.classIds, newClass.id],
+      }));
     } catch (err) {
       console.error("addClass error:", err);
     }
@@ -191,10 +201,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to update class");
       const updated: Class = await res.json();
-      set({
-        classes: get().classes.map(c => c.id === id ? updated : c),
-        filteredClasses: get().filteredClasses.map(c => c.id === id ? updated : c),
-      });
+      set((state) => ({ classesMap: { ...state.classesMap, [id]: updated } }));
     } catch (err) {
       console.error("updateClass error:", err);
     }
@@ -204,9 +211,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
     try {
       const res = await fetch(`/api/classes/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete class");
-      set({
-        classes: get().classes.filter(c => c.id !== id),
-        filteredClasses: get().filteredClasses.filter(c => c.id !== id),
+      set((state) => {
+        const { [id]: _, ...classesMap } = state.classesMap;
+        return { classesMap, classIds: state.classIds.filter(cid => cid !== id) };
       });
     } catch (err) {
       console.error("deleteClass error:", err);
@@ -219,7 +226,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
       const res = await fetch("/api/attendance");
       if (!res.ok) throw new Error("Failed to fetch attendance");
       const data: Attendance[] = await res.json();
-      set({ attendances: data });
+      const attendancesMap: Record<string, Attendance> = {};
+      const attendanceIds: string[] = [];
+      data.forEach(a => { attendancesMap[a.id] = a; attendanceIds.push(a.id); });
+      set({ attendancesMap, attendanceIds });
     } catch (err) {
       console.error("fetchAttendance error:", err);
     }
@@ -234,7 +244,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to add attendance");
       const newRecord: Attendance = await res.json();
-      set({ attendances: [...get().attendances, newRecord] });
+      set((state) => ({
+        attendancesMap: { ...state.attendancesMap, [newRecord.id]: newRecord },
+        attendanceIds: [...state.attendanceIds, newRecord.id],
+      }));
     } catch (err) {
       console.error("addAttendance error:", err);
     }
@@ -249,9 +262,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to update attendance");
       const updated: Attendance = await res.json();
-      set({
-        attendances: get().attendances.map(a => a.id === id ? updated : a),
-      });
+      set((state) => ({
+        attendancesMap: { ...state.attendancesMap, [id]: updated },
+      }));
     } catch (err) {
       console.error("updateAttendance error:", err);
     }
@@ -261,21 +274,22 @@ export const useUserStore = create<UserStore>((set, get) => ({
     try {
       const res = await fetch(`/api/attendance/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete attendance");
-      set({
-        attendances: get().attendances.filter(a => a.id !== id),
+      set((state) => {
+        const { [id]: _, ...attendancesMap } = state.attendancesMap;
+        return { attendancesMap, attendanceIds: state.attendanceIds.filter(aid => aid !== id) };
       });
     } catch (err) {
       console.error("deleteAttendance error:", err);
     }
   },
 
-  // ---------------- Relation Helpers ----------------
-  getStudents: () => get().users.filter(u => u.role === "STUDENT"),
-  getTeachers: () => get().users.filter(u => u.role === "TEACHER"),
-  getClassesForTeacher: (teacherId) => get().classes.filter(c => c.teacherId === teacherId),
-  getChildrenForParent: (parentId) => get().users.filter(u => u.parentId === parentId),
+  // ---------------- Relation helpers ----------------
+  getStudents: () => Object.values(get().usersMap).filter(u => u.role === "STUDENT"),
+  getTeachers: () => Object.values(get().usersMap).filter(u => u.role === "TEACHER"),
+  getClassesForTeacher: (teacherId) => Object.values(get().classesMap).filter(c => c.teacherId === teacherId),
+  getChildrenForParent: (parentId) => Object.values(get().usersMap).filter(u => u.parentId === parentId),
   getStudentsForClass: (classId) => {
-    const cls = get().classes.find(c => c.id === classId);
-    return cls ? get().users.filter(u => cls.students.includes(u)) : [];
+    const cls = get().classesMap[classId];
+    return cls ? Object.values(get().usersMap).filter(u => cls.students.includes(u)) : [];
   },
 }));
