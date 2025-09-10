@@ -1,8 +1,7 @@
 import { create } from "zustand";
-import type { User, Class, Student } from "@/types/users";
+import type { User, Class, Attendance, SchoolRole, AttendanceStatus } from "@/types/users";
 
 // ---------------- Debounce helper ----------------
-// Type-safe debounce for single-argument string functions
 function debounceString(fn: (arg: string) => void, delay: number) {
   let timer: ReturnType<typeof setTimeout>;
   return (arg: string) => {
@@ -16,39 +15,40 @@ interface UserStore {
   filteredUsers: User[];
   classes: Class[];
   filteredClasses: Class[];
-  students: Student[];
-  filteredStudents: Student[];
-
-  // Fetch
+  attendances: Attendance[];
+  
+  // Fetch Users
   fetchUsers: () => Promise<void>;
   fetchUserById: (id: string) => Promise<User | undefined>;
   searchUsers: (query: string) => void;
   resetUsersSearch: () => void;
-
-  fetchClasses: () => Promise<void>;
-  fetchClassById: (id: string) => Promise<Class | undefined>;
-  searchClasses: (query: string) => void;
-  resetClassesSearch: () => void;
-
-  fetchStudents: () => Promise<void>;
-  fetchStudentById: (id: string) => Promise<Student | undefined>;
-  searchStudents: (query: string) => void;
-  resetStudentsSearch: () => void;
 
   // Users CRUD
   addUser: (user: Omit<User, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
 
-  // Classes CRUD
+  // Class Fetch & CRUD
+  fetchClasses: () => Promise<void>;
+  fetchClassById: (id: string) => Promise<Class | undefined>;
+  searchClasses: (query: string) => void;
+  resetClassesSearch: () => void;
   addClass: (cls: Omit<Class, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateClass: (id: string, data: Partial<Class>) => Promise<void>;
   deleteClass: (id: string) => Promise<void>;
 
-  // Students CRUD
-  addStudent: (student: Omit<Student, "id" | "createdAt" | "updatedAt">) => Promise<void>;
-  updateStudent: (id: string, data: Partial<Student>) => Promise<void>;
-  deleteStudent: (id: string) => Promise<void>;
+  // Attendance
+  fetchAttendance: () => Promise<void>;
+  addAttendance: (record: Omit<Attendance, "id" | "createdAt">) => Promise<void>;
+  updateAttendance: (id: string, data: Partial<Attendance>) => Promise<void>;
+  deleteAttendance: (id: string) => Promise<void>;
+
+  // Helpers for relations
+  getStudents: () => User[];
+  getTeachers: () => User[];
+  getClassesForTeacher: (teacherId: string) => Class[];
+  getChildrenForParent: (parentId: string) => User[];
+  getStudentsForClass: (classId: string) => User[];
 }
 
 export const useUserStore = create<UserStore>((set, get) => ({
@@ -56,10 +56,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
   filteredUsers: [],
   classes: [],
   filteredClasses: [],
-  students: [],
-  filteredStudents: [],
+  attendances: [],
 
-  // ---------------- Fetch ----------------
+  // ---------------- Users ----------------
   fetchUsers: async () => {
     try {
       const res = await fetch("/api/users");
@@ -88,62 +87,6 @@ export const useUserStore = create<UserStore>((set, get) => ({
     set({ filteredUsers: [...get().users] });
   },
 
-  fetchClasses: async () => {
-    try {
-      const res = await fetch("/api/classes");
-      if (!res.ok) throw new Error("Failed to fetch classes");
-      const data: Class[] = await res.json();
-      set({ classes: data, filteredClasses: data });
-    } catch (err) {
-      console.error("fetchClasses error:", err);
-    }
-  },
-
-  fetchClassById: async (id) => {
-    await get().fetchClasses();
-    return get().classes.find(c => c.id === id);
-  },
-
-  searchClasses: debounceString((query: string) => {
-    const filtered = get().classes.filter(c =>
-      c.name.toLowerCase().includes(query.toLowerCase())
-    );
-    set({ filteredClasses: filtered });
-  }, 300),
-
-  resetClassesSearch: () => {
-    set({ filteredClasses: [...get().classes] });
-  },
-
-  fetchStudents: async () => {
-    try {
-      const res = await fetch("/api/students");
-      if (!res.ok) throw new Error("Failed to fetch students");
-      const data: Student[] = await res.json();
-      set({ students: data, filteredStudents: data });
-    } catch (err) {
-      console.error("fetchStudents error:", err);
-    }
-  },
-
-  fetchStudentById: async (id) => {
-    await get().fetchStudents();
-    return get().students.find(s => s.id === id);
-  },
-
-  searchStudents: debounceString((query: string) => {
-    const filtered = get().students.filter(s =>
-      s.firstName.toLowerCase().includes(query.toLowerCase()) ||
-      s.lastName.toLowerCase().includes(query.toLowerCase())
-    );
-    set({ filteredStudents: filtered });
-  }, 300),
-
-  resetStudentsSearch: () => {
-    set({ filteredStudents: [...get().students] });
-  },
-
-  // ---------------- Users CRUD ----------------
   addUser: async (user) => {
     try {
       const res = await fetch("/api/users", {
@@ -193,7 +136,34 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }
   },
 
-  // ---------------- Classes CRUD ----------------
+  // ---------------- Classes ----------------
+  fetchClasses: async () => {
+    try {
+      const res = await fetch("/api/classes");
+      if (!res.ok) throw new Error("Failed to fetch classes");
+      const data: Class[] = await res.json();
+      set({ classes: data, filteredClasses: data });
+    } catch (err) {
+      console.error("fetchClasses error:", err);
+    }
+  },
+
+  fetchClassById: async (id) => {
+    await get().fetchClasses();
+    return get().classes.find(c => c.id === id);
+  },
+
+  searchClasses: debounceString((query: string) => {
+    const filtered = get().classes.filter(c =>
+      c.name.toLowerCase().includes(query.toLowerCase())
+    );
+    set({ filteredClasses: filtered });
+  }, 300),
+
+  resetClassesSearch: () => {
+    set({ filteredClasses: [...get().classes] });
+  },
+
   addClass: async (cls) => {
     try {
       const res = await fetch("/api/classes", {
@@ -243,53 +213,69 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }
   },
 
-  // ---------------- Students CRUD ----------------
-  addStudent: async (student) => {
+  // ---------------- Attendance ----------------
+  fetchAttendance: async () => {
     try {
-      const res = await fetch("/api/students", {
-        method: "POST",
-        body: JSON.stringify(student),
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) throw new Error("Failed to add student");
-      const newStudent: Student = await res.json();
-      set({
-        students: [...get().students, newStudent],
-        filteredStudents: [...get().filteredStudents, newStudent],
-      });
+      const res = await fetch("/api/attendance");
+      if (!res.ok) throw new Error("Failed to fetch attendance");
+      const data: Attendance[] = await res.json();
+      set({ attendances: data });
     } catch (err) {
-      console.error("addStudent error:", err);
+      console.error("fetchAttendance error:", err);
     }
   },
 
-  updateStudent: async (id, data) => {
+  addAttendance: async (record) => {
     try {
-      const res = await fetch(`/api/students/${id}`, {
+      const res = await fetch("/api/attendance", {
+        method: "POST",
+        body: JSON.stringify(record),
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to add attendance");
+      const newRecord: Attendance = await res.json();
+      set({ attendances: [...get().attendances, newRecord] });
+    } catch (err) {
+      console.error("addAttendance error:", err);
+    }
+  },
+
+  updateAttendance: async (id, data) => {
+    try {
+      const res = await fetch(`/api/attendance/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) throw new Error("Failed to update student");
-      const updated: Student = await res.json();
+      if (!res.ok) throw new Error("Failed to update attendance");
+      const updated: Attendance = await res.json();
       set({
-        students: get().students.map(s => s.id === id ? updated : s),
-        filteredStudents: get().filteredStudents.map(s => s.id === id ? updated : s),
+        attendances: get().attendances.map(a => a.id === id ? updated : a),
       });
     } catch (err) {
-      console.error("updateStudent error:", err);
+      console.error("updateAttendance error:", err);
     }
   },
 
-  deleteStudent: async (id) => {
+  deleteAttendance: async (id) => {
     try {
-      const res = await fetch(`/api/students/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete student");
+      const res = await fetch(`/api/attendance/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete attendance");
       set({
-        students: get().students.filter(s => s.id !== id),
-        filteredStudents: get().filteredStudents.filter(s => s.id !== id),
+        attendances: get().attendances.filter(a => a.id !== id),
       });
     } catch (err) {
-      console.error("deleteStudent error:", err);
+      console.error("deleteAttendance error:", err);
     }
+  },
+
+  // ---------------- Relation Helpers ----------------
+  getStudents: () => get().users.filter(u => u.role === "STUDENT"),
+  getTeachers: () => get().users.filter(u => u.role === "TEACHER"),
+  getClassesForTeacher: (teacherId) => get().classes.filter(c => c.teacherId === teacherId),
+  getChildrenForParent: (parentId) => get().users.filter(u => u.parentId === parentId),
+  getStudentsForClass: (classId) => {
+    const cls = get().classes.find(c => c.id === classId);
+    return cls ? get().users.filter(u => cls.students.includes(u)) : [];
   },
 }));

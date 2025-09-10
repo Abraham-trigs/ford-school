@@ -13,16 +13,20 @@ const links = [
 ];
 
 interface SidebarProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  mode?: "desktop" | "mobile";
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({
+  isOpen = true,
+  onClose,
+  mode = "desktop",
+}: SidebarProps) {
   const pathname = usePathname();
 
-  return (
-    <>
-      {/* Desktop Sidebar */}
+  if (mode === "desktop") {
+    return (
       <aside className="hidden md:flex flex-col w-64 bg-wine text-back h-screen p-4 border-r border-light sticky top-0">
         <h1 className="text-xl font-bold mb-6">Teacher Panel</h1>
         <nav className="flex flex-col gap-3">
@@ -41,32 +45,34 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           ))}
         </nav>
       </aside>
+    );
+  }
 
-      {/* Mobile Sidebar */}
-      <div
-        className={`md:hidden absolute right-4 top-16 z-40 w-56 bg-wine border border-light rounded shadow-lg overflow-hidden transition-all duration-300 ease-in-out transform origin-top ${
-          isOpen
-            ? "max-h-[1000px] p-4 scale-y-100 opacity-100"
-            : "max-h-0 p-0 scale-y-95 opacity-0"
-        }`}
-      >
-        <nav className="flex flex-col gap-3">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`p-2 rounded transition ${
-                pathname === link.href
-                  ? "bg-light text-back"
-                  : "hover:bg-light hover:text-back"
-              }`}
-              onClick={onClose}
-            >
-              {link.name}
-            </Link>
-          ))}
-        </nav>
-      </div>
-    </>
+  // --- Mobile Sidebar ---
+  return (
+    <div
+      className={`md:hidden absolute right-4 top-16 z-40 w-56 bg-wine border border-light rounded shadow-lg overflow-hidden transition-all duration-300 ease-in-out transform origin-top ${
+        isOpen
+          ? "max-h-[1000px] p-4 scale-y-100 opacity-100"
+          : "max-h-0 p-0 scale-y-95 opacity-0"
+      }`}
+    >
+      <nav className="flex flex-col gap-3">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={`p-2 rounded transition ${
+              pathname === link.href
+                ? "bg-light text-back"
+                : "hover:bg-light hover:text-back"
+            }`}
+            onClick={onClose}
+          >
+            {link.name}
+          </Link>
+        ))}
+      </nav>
+    </div>
   );
 }

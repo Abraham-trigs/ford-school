@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { HiMenu, HiX } from "react-icons/hi";
 import ProfileMenu from "./ProfileMenu";
-import Sidebar from "@/components/teacher/Sidebar";
 import { Role } from "./NavbarLinks";
+import Sidebar from "@/components/teacher/Sidebar";
 
 interface NavbarProps {
   role: Role;
@@ -24,9 +24,9 @@ export default function Navbar({ role }: NavbarProps) {
           {/* Logo */}
           <Link
             href={`/${role.toLowerCase()}`}
-            className="text-xl font-bold text-light ml-2 md:ml-0"
+            className="text-xl font-bold text-back ml-2 md:ml-0"
           >
-            FordSchool
+            FordSchools
           </Link>
 
           {/* Right-side items */}
@@ -51,6 +51,7 @@ export default function Navbar({ role }: NavbarProps) {
 
       {/* Mobile Sidebar */}
       <Sidebar
+        mode="mobile"
         isOpen={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
       />
