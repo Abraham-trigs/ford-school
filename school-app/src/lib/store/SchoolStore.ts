@@ -39,6 +39,10 @@ interface SchoolStore {
   updateAttendance: (id: string, data: Partial<Attendance>) => Promise<void>;
   deleteAttendance: (id: string) => Promise<void>;
 
+  // ---------------- Attendance helpers ----------------
+  getAttendanceByDate: (date: string) => Attendance[];
+  getLatestAttendanceDate: () => string | null;
+
   // ---------------- Relation helpers ----------------
   getStudents: () => User[];
   getTeachers: () => User[];
@@ -123,9 +127,7 @@ export const useSchoolStore = create<SchoolStore>()(
           });
           if (!res.ok) throw new Error("Failed to update user");
           const updated: User = await res.json();
-          set((state) => ({
-            usersMap: { ...state.usersMap, [id]: updated },
-          }));
+          set((state) => ({ usersMap: { ...state.usersMap, [id]: updated } }));
         } catch (err) {
           console.error("updateUser error:", err);
         }
@@ -274,9 +276,7 @@ export const useSchoolStore = create<SchoolStore>()(
           });
           if (!res.ok) throw new Error("Failed to update attendance");
           const updated: Attendance = await res.json();
-          set((state) => ({
-            attendancesMap: { ...state.attendancesMap, [id]: updated },
-          }));
+          set((state) => ({ attendancesMap: { ...state.attendancesMap, [id]: updated } }));
         } catch (err) {
           console.error("updateAttendance error:", err);
         }
@@ -295,6 +295,20 @@ export const useSchoolStore = create<SchoolStore>()(
         }
       },
 
+      // ---------------- Attendance helpers ----------------
+      getAttendanceByDate: (date: string) => {
+        return get().attendanceIds
+          .map(id => get().attendancesMap[id])
+          .filter(a => a.date.split("T")[0] === date);
+      },
+      getLatestAttendanceDate: () => {
+        if (!get().attendanceIds.length) return null;
+        const dates = get().attendanceIds
+          .map(id => get().attendancesMap[id].date.split("T")[0])
+          .sort();
+        return dates[dates.length - 1];
+      },
+
       // ---------------- Relation helpers ----------------
       getStudents: () => Object.values(get().usersMap).filter(u => u.role === "STUDENT"),
       getTeachers: () => Object.values(get().usersMap).filter(u => u.role === "TEACHER"),
@@ -306,8 +320,8 @@ export const useSchoolStore = create<SchoolStore>()(
       },
     }),
     {
-      name: "school-store", // unique key in localStorage
-      getStorage: () => localStorage, // defaults to localStorage
+      name: "school-store",
+      getStorage: () => localStorage,
     }
   )
 );
