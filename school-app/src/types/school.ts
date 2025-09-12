@@ -22,6 +22,21 @@ export interface Class {
   students?: Student[];
 }
 
+export interface Attendance {
+  id: string;
+  studentId: string;
+  classId: string;
+  date: string; // ISO string from DateTime
+  status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"; // matches AttendanceStatus enum
+  note?: string;
+  recordedById: string;
+  student: Student; // populated via include
+  class: Class;     // populated via include
+  createdAt: string;
+  updatedAt?: string; // optional if you want to track updates
+}
+
+
 export interface User {
   id: string;
   email: string;

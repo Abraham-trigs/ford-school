@@ -1,85 +1,73 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HiEye, HiEyeOff } from "react-icons/hi";
-import { motion, Variants, easeOut } from "framer-motion"; // ✅ import easing function
+import { motion, Variants, easeOut } from "framer-motion";
 import LoginButton from "@/components/LoginButton";
-
-interface SessionResponse {
-  loggedIn: boolean;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-  };
-}
+import { useSessionStore } from "@/lib/store/sessionStore";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login, user, loggedIn, loading } = useSessionStore();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = async () => {
-    setLoading(true);
-    setError("");
+  // 🔥 Redirect if already logged in
+  useEffect(() => {
+    if (loggedIn && user) {
+      redirectByRole(user.role);
+    }
+  }, [loggedIn, user]);
 
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Invalid credentials");
-      }
-
-      const sessionRes = await fetch("/api/auth/session");
-      const sessionData: SessionResponse = await sessionRes.json();
-
-      if (sessionData.loggedIn && sessionData.user) {
-        switch (sessionData.user.role) {
-          case "ADMIN":
-            router.push("/admin");
-            break;
-          case "TEACHER":
-            router.push("/teacher");
-            break;
-          case "STUDENT":
-            router.push("/student");
-            break;
-          case "PARENT":
-            router.push("/parent");
-            break;
-          case "HEADMASTER":
-            router.push("/headmaster");
-            break;
-          case "PROPRIETOR":
-            router.push("/proprietor");
-            break;
-          default:
-            router.push("/login");
-        }
-      } else {
-        setError("Login failed. Please try again.");
-      }
-    } catch (err: unknown) {
-      // ✅ Safely extract error message
-      const message =
-        err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const redirectByRole = (role: string) => {
+    switch (role) {
+      case "ADMIN":
+        router.replace("/admin");
+        break;
+      case "TEACHER":
+        router.replace("/teacher");
+        break;
+      case "STUDENT":
+        router.replace("/student");
+        break;
+      case "PARENT":
+        router.replace("/parent");
+        break;
+      case "HEADMASTER":
+        router.replace("/headmaster");
+        break;
+      case "PROPRIETOR":
+        router.replace("/proprietor");
+        break;
+      default:
+        router.replace("/");
     }
   };
 
-  // ✅ Typed variants for Framer Motion
+  const handleLogin = async () => {
+    setError("");
+
+    try {
+      await login(email, password); // ✅ use store login
+
+      if (
+        useSessionStore.getState().loggedIn &&
+        useSessionStore.getState().user
+      ) {
+        redirectByRole(useSessionStore.getState().user!.role);
+      }
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Login failed. Please try again.";
+      setError(message);
+    }
+  };
+
+  // ✅ Framer Motion variants
   const containerVariants: Variants = {
     hidden: {},
     visible: { transition: { staggerChildren: 0.15 } },
@@ -90,7 +78,7 @@ export default function LoginPage() {
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5, ease: easeOut }, // ✅ use imported easing
+      transition: { duration: 0.5, ease: easeOut },
     },
   };
 

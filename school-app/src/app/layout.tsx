@@ -1,4 +1,3 @@
-// app/layout.tsx
 import "./globals.css";
 import { Lexend_Deca } from "next/font/google";
 import SessionProvider from "@/components/SessionProvider";
@@ -23,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${lexendDeca.variable} font-sans antialiased`}>
+        {/* ✅ Wrap the whole app in the session logic */}
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

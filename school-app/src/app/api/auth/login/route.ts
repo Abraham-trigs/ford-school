@@ -2,10 +2,9 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken"; // default import
+import jwt from "jsonwebtoken";
 import prisma from "@/lib/prisma";
 
-// ensure SECRET is typed as string
 const SECRET = process.env.JWT_SECRET as string;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
@@ -38,14 +37,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // generate JWT token — inline type assertion fixes TypeScript underline
+    // generate JWT token
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       SECRET,
-      { expiresIn: EXPIRES_IN } as jwt.SignOptions
+      { expiresIn: EXPIRES_IN }
     );
 
-    // create response
+    // response payload
     const response = NextResponse.json({
       success: true,
       user: {
@@ -54,16 +53,18 @@ export async function POST(req: NextRequest) {
         email: user.email,
         role: user.role,
       },
-      token,
     });
 
     // attach cookie
-    response.cookies.set("session", token, {
+    response.cookies.set({
+      name: "session",
+      value: token,
       httpOnly: true,
       path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // explicit expiry
     });
 
     return response;

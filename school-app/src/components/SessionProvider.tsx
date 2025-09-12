@@ -11,7 +11,7 @@ export default function SessionProvider({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { fetchSession, loggedIn, role, setRole, clearRole } =
+  const { fetchSession, loggedIn, role, setRole, clearRole, loading } =
     useSessionStore();
 
   // ✅ Fetch session once on mount
@@ -22,6 +22,8 @@ export default function SessionProvider({
 
   // ✅ Handle redirects when path or role changes
   useEffect(() => {
+    if (loading) return; // ⬅️ Don't redirect until session check finishes
+
     let detectedRole: string | null = null;
 
     if (pathname.startsWith("/teacher")) detectedRole = "TEACHER";
@@ -45,11 +47,11 @@ export default function SessionProvider({
     } else {
       clearRole();
 
-      if (pathname !== "/" && pathname !== "/login") {
+      if (pathname !== "/" && pathname !== "/login" && !loggedIn) {
         router.replace("/login");
       }
     }
-  }, [pathname, loggedIn, role, setRole, clearRole, router]);
+  }, [pathname, loggedIn, role, setRole, clearRole, router, loading]);
 
   return <>{children}</>;
 }

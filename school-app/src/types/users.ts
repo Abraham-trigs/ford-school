@@ -36,6 +36,23 @@ export interface User {
   taughtStudents?: Student[];
 }
 
+// ---------------- Attendance ----------------
+export interface Attendance {
+  id: string;
+  studentId: string;
+  classId: string;
+  date: string; // ISO string from DateTime
+  status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"; // matches AttendanceStatus enum
+  note?: string;
+  recordedById: string;
+  student: Student; // populated via include
+  class: Class;     // populated via include
+  createdAt: string;
+  updatedAt?: string; // optional if you want to track updates
+}
+
+
+
 export enum UserRole {
   TEACHER = "TEACHER",
   PARENT = "PARENT",
