@@ -1,6 +1,8 @@
+"use client";
+
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { User, Class, Attendance } from "@/types/users";
+import type { User, Class, Attendance, UserRole } from "@/types/school";
 
 interface SchoolStore {
   // ---------------- State ----------------
@@ -78,7 +80,10 @@ export const useSchoolStore = create<SchoolStore>()(
           const data: { users: User[]; total: number } = await res.json();
           const usersMap: Record<string, User> = {};
           const userIds: string[] = [];
-          data.users.forEach(u => { usersMap[u.id] = u; userIds.push(u.id); });
+          data.users.forEach((u) => {
+            usersMap[u.id] = u;
+            userIds.push(u.id);
+          });
           set({
             usersMap,
             userIds,
@@ -93,7 +98,9 @@ export const useSchoolStore = create<SchoolStore>()(
       },
 
       searchUsers: async (query: string) => {
-        const res = await fetch(`/api/users?search=${encodeURIComponent(query)}&limit=${get().pageSize}`);
+        const res = await fetch(
+          `/api/users?search=${encodeURIComponent(query)}&limit=${get().pageSize}`
+        );
         if (!res.ok) throw new Error("Failed to search users");
         const data: { users: User[]; total: number } = await res.json();
         return data.users;
@@ -141,7 +148,7 @@ export const useSchoolStore = create<SchoolStore>()(
             const { [id]: _, ...usersMap } = state.usersMap;
             return {
               usersMap,
-              userIds: state.userIds.filter(uid => uid !== id),
+              userIds: state.userIds.filter((uid) => uid !== id),
               totalUsers: state.totalUsers - 1,
             };
           });
@@ -159,7 +166,10 @@ export const useSchoolStore = create<SchoolStore>()(
           const data: Class[] = await res.json();
           const classesMap: Record<string, Class> = {};
           const classIds: string[] = [];
-          data.forEach(c => { classesMap[c.id] = c; classIds.push(c.id); });
+          data.forEach((c) => {
+            classesMap[c.id] = c;
+            classIds.push(c.id);
+          });
           set({ classesMap, classIds });
         } catch (err) {
           console.error("fetchClasses error:", err);
@@ -176,7 +186,10 @@ export const useSchoolStore = create<SchoolStore>()(
           const data: Class[] = await res.json();
           const classesMap: Record<string, Class> = {};
           const classIds: string[] = [];
-          data.forEach(c => { classesMap[c.id] = c; classIds.push(c.id); });
+          data.forEach((c) => {
+            classesMap[c.id] = c;
+            classIds.push(c.id);
+          });
           set({ classesMap, classIds });
         } catch (err) {
           console.error("fetchTeacherClasses error:", err);
@@ -224,7 +237,7 @@ export const useSchoolStore = create<SchoolStore>()(
           if (!res.ok) throw new Error("Failed to delete class");
           set((state) => {
             const { [id]: _, ...classesMap } = state.classesMap;
-            return { classesMap, classIds: state.classIds.filter(cid => cid !== id) };
+            return { classesMap, classIds: state.classIds.filter((cid) => cid !== id) };
           });
         } catch (err) {
           console.error("deleteClass error:", err);
@@ -240,7 +253,10 @@ export const useSchoolStore = create<SchoolStore>()(
           const data: Attendance[] = await res.json();
           const attendancesMap: Record<string, Attendance> = {};
           const attendanceIds: string[] = [];
-          data.forEach(a => { attendancesMap[a.id] = a; attendanceIds.push(a.id); });
+          data.forEach((a) => {
+            attendancesMap[a.id] = a;
+            attendanceIds.push(a.id);
+          });
           set({ attendancesMap, attendanceIds });
         } catch (err) {
           console.error("fetchAttendance error:", err);
@@ -288,7 +304,10 @@ export const useSchoolStore = create<SchoolStore>()(
           if (!res.ok) throw new Error("Failed to delete attendance");
           set((state) => {
             const { [id]: _, ...attendancesMap } = state.attendancesMap;
-            return { attendancesMap, attendanceIds: state.attendanceIds.filter(aid => aid !== id) };
+            return {
+              attendancesMap,
+              attendanceIds: state.attendanceIds.filter((aid) => aid !== id),
+            };
           });
         } catch (err) {
           console.error("deleteAttendance error:", err);
@@ -297,26 +316,31 @@ export const useSchoolStore = create<SchoolStore>()(
 
       // ---------------- Attendance helpers ----------------
       getAttendanceByDate: (date: string) => {
-        return get().attendanceIds
-          .map(id => get().attendancesMap[id])
-          .filter(a => a.date.split("T")[0] === date);
+        return get()
+          .attendanceIds.map((id) => get().attendancesMap[id])
+          .filter((a) => a.date.split("T")[0] === date);
       },
       getLatestAttendanceDate: () => {
         if (!get().attendanceIds.length) return null;
-        const dates = get().attendanceIds
-          .map(id => get().attendancesMap[id].date.split("T")[0])
+        const dates = get()
+          .attendanceIds.map((id) => get().attendancesMap[id].date.split("T")[0])
           .sort();
         return dates[dates.length - 1];
       },
 
       // ---------------- Relation helpers ----------------
-      getStudents: () => Object.values(get().usersMap).filter(u => u.role === "STUDENT"),
-      getTeachers: () => Object.values(get().usersMap).filter(u => u.role === "TEACHER"),
-      getClassesForTeacher: (teacherId) => Object.values(get().classesMap).filter(c => c.teacherId === teacherId),
-      getChildrenForParent: (parentId) => Object.values(get().usersMap).filter(u => u.parentId === parentId),
+      getStudents: () => Object.values(get().usersMap).filter((u) => u.role === UserRole.STUDENT),
+      getTeachers: () => Object.values(get().usersMap).filter((u) => u.role === UserRole.TEACHER),
+      getClassesForTeacher: (teacherId) =>
+        Object.values(get().classesMap).filter((c) => c.teacherId === teacherId),
+      getChildrenForParent: (parentId) =>
+        Object.values(get().usersMap).filter((u) => u.parentId === parentId),
       getStudentsForClass: (classId) => {
         const cls = get().classesMap[classId];
-        return cls ? Object.values(get().usersMap).filter(u => cls.students.includes(u)) : [];
+        if (!cls) return [];
+        return Object.values(get().usersMap).filter(
+          (u) => u.role === UserRole.STUDENT && u.classesAttended?.some((c) => c.id === classId)
+        );
       },
     }),
     {

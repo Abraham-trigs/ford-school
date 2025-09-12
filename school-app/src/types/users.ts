@@ -1,16 +1,41 @@
 // types/school.ts
-export interface Student {
+
+export enum UserRole {
+  STUDENT = "STUDENT",
+  PARENT = "PARENT",
+  TEACHER = "TEACHER",
+  ADMIN = "ADMIN",
+  HEADMASTER = "HEADMASTER",
+  PROPRIETOR = "PROPRIETOR",
+}
+
+export enum AttendanceStatus {
+  PRESENT = "PRESENT",
+  ABSENT = "ABSENT",
+  LATE = "LATE",
+  EXCUSED = "EXCUSED",
+}
+
+export interface User {
   id: string;
-  firstName: string;
-  lastName: string;
-  classId: string;
-  teacherId: string;
-  parentId?: string;
+  name: string;
+  email: string;
+  password?: string;
+  role: UserRole;
+  phone?: string;
   dob?: string;
-  gender?: "M" | "F";
+  gender?: string;
   photoUrl?: string;
   createdAt: string;
   updatedAt: string;
+
+  // Relations
+  teacherClasses?: Class[];   // if role = TEACHER
+  children?: User[];          // if role = PARENT
+  parent?: User;              // if role = STUDENT
+  classesAttended?: Class[];  // if role = STUDENT
+  attendanceAsStudent?: Attendance[];
+  attendanceRecorded?: Attendance[];
 }
 
 export interface Class {
@@ -19,45 +44,28 @@ export interface Class {
   teacherId?: string;
   createdAt: string;
   updatedAt: string;
-  students?: Student[];
+
+  teacher?: User;       // role = TEACHER
+  students?: User[];    // role = STUDENT
+  attendances?: Attendance[];
 }
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  password?: string;
-  role: UserRole;
-  phone?: string;
-  createdAt: string;
-  updatedAt: string;
-  teacherClasses?: Class[];
-  children?: Student[];
-  taughtStudents?: Student[];
-}
-
-// ---------------- Attendance ----------------
 export interface Attendance {
   id: string;
   studentId: string;
   classId: string;
-  date: string; // ISO string from DateTime
-  status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"; // matches AttendanceStatus enum
+  date: string; // ISO string
+  status: AttendanceStatus;
   note?: string;
   recordedById: string;
-  student: Student; // populated via include
-  class: Class;     // populated via include
   createdAt: string;
-  updatedAt?: string; // optional if you want to track updates
+  updatedAt?: string;
+
+  // Relations
+  class: Class;
+  student: User;      // role = STUDENT
+  recordedBy: User;   // teacher/admin who recorded
 }
 
-
-
-export enum UserRole {
-  TEACHER = "TEACHER",
-  PARENT = "PARENT",
-  STUDENT = "STUDENT",
-  ADMIN = "ADMIN",
-  HEADMASTER = "HEADMASTER",
-  PROPRIETOR = "PROPRIETOR",
-}
+// Derived type if you still want a shortcut for Student
+export type Student = User & { role: UserRole.STUDENT };

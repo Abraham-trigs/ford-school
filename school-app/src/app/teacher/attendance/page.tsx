@@ -11,15 +11,17 @@ const colors = {
   switch: "#eee6e6",
 };
 
+const PAGE_SIZE = 30;
+
 export default function AttendancePage() {
   const fetchAttendance = useSchoolStore((state) => state.fetchAttendance);
   const attendancesMap = useSchoolStore((state) => state.attendancesMap);
   const attendanceIds = useSchoolStore((state) => state.attendanceIds);
-  const pageSize = useSchoolStore((state) => state.pageSize);
 
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState<string>("");
-  const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
+  const [earliestDate, setEarliestDate] = useState<string>("");
+  const [latestDate, setLatestDate] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Load attendance
@@ -32,58 +34,56 @@ export default function AttendancePage() {
     load();
   }, [fetchAttendance]);
 
-  // Compute attendance dates
+  // Compute earliestDate, latestDate, currentDate
   useEffect(() => {
     if (!attendanceIds.length) {
       const today = new Date().toISOString().split("T")[0];
       setCurrentDate(today);
-      setAttendanceDates([today]);
-      setCurrentPage(1);
+      setEarliestDate(today);
+      setLatestDate(today);
       return;
     }
 
-    const dates = Array.from(
-      new Set(attendanceIds.map((id) => attendancesMap[id].date.split("T")[0]))
-    ).sort();
+    const dates = attendanceIds
+      .map((id) => attendancesMap[id].date.split("T")[0])
+      .sort(); // ascending
 
     const today = new Date().toISOString().split("T")[0];
     const hasToday = dates.includes(today);
 
+    setEarliestDate(dates[0]);
+    setLatestDate(dates[dates.length - 1]);
     setCurrentDate(hasToday ? today : dates[dates.length - 1]);
-    setAttendanceDates(dates);
     setCurrentPage(1);
   }, [attendanceIds, attendancesMap]);
 
-  // Filter attendances for the current date
-  const attendancesForDate: Attendance[] = attendanceIds
+  const filteredAttendances = attendanceIds
     .map((id) => attendancesMap[id])
     .filter((a) => a.date.split("T")[0] === currentDate);
 
-  const totalPages = Math.ceil(attendancesForDate.length / pageSize);
-  const paginatedAttendances = attendancesForDate.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
+  const totalPages = Math.ceil(filteredAttendances.length / PAGE_SIZE);
+  const pagedAttendances = filteredAttendances.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
 
-  if (loading)
-    return (
-      <p className="text-lg" style={{ color: colors.wine }}>
-        Loading attendance...
-      </p>
-    );
-
+  // Day navigation
   const handlePrevDay = () => {
-    const idx = attendanceDates.indexOf(currentDate);
-    if (idx > 0) {
-      setCurrentDate(attendanceDates[idx - 1]);
+    const prev = new Date(currentDate);
+    prev.setDate(prev.getDate() - 1);
+    const prevDate = prev.toISOString().split("T")[0];
+    if (prevDate >= earliestDate) {
+      setCurrentDate(prevDate);
       setCurrentPage(1);
     }
   };
 
   const handleNextDay = () => {
-    const idx = attendanceDates.indexOf(currentDate);
-    if (idx >= 0 && idx < attendanceDates.length - 1) {
-      setCurrentDate(attendanceDates[idx + 1]);
+    const next = new Date(currentDate);
+    next.setDate(next.getDate() + 1);
+    const nextDate = next.toISOString().split("T")[0];
+    if (nextDate <= latestDate) {
+      setCurrentDate(nextDate);
       setCurrentPage(1);
     }
   };
@@ -93,13 +93,21 @@ export default function AttendancePage() {
     setCurrentPage(1);
   };
 
+  // Pagination
   const handlePrevPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
+    if (currentPage > 1) setCurrentPage((p) => p - 1);
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    if (currentPage < totalPages) setCurrentPage((p) => p + 1);
   };
+
+  if (loading)
+    return (
+      <p className="text-lg" style={{ color: colors.wine }}>
+        Loading attendance...
+      </p>
+    );
 
   return (
     <div
@@ -110,20 +118,17 @@ export default function AttendancePage() {
         Attendance Records
       </h1>
 
-      {/* Date Navigation */}
       <div className="flex gap-2 mb-4 items-center flex-wrap">
         <button
           className="px-3 py-1 rounded"
           style={{
-            backgroundColor: colors.light,
-            color: colors.back,
-            cursor:
-              attendanceDates.indexOf(currentDate) <= 0
-                ? "not-allowed"
-                : "pointer",
+            backgroundColor:
+              currentDate <= earliestDate ? colors.switch : colors.light,
+            color: currentDate <= earliestDate ? colors.wine : colors.back,
+            cursor: currentDate <= earliestDate ? "not-allowed" : "pointer",
           }}
           onClick={handlePrevDay}
-          disabled={attendanceDates.indexOf(currentDate) <= 0}
+          disabled={currentDate <= earliestDate}
         >
           Previous Day
         </button>
@@ -131,8 +136,8 @@ export default function AttendancePage() {
         <input
           type="date"
           value={currentDate}
-          min={attendanceDates[0]}
-          max={attendanceDates[attendanceDates.length - 1]}
+          min={earliestDate}
+          max={latestDate}
           onChange={handleDateChange}
           className="p-1 rounded border"
           style={{
@@ -146,32 +151,18 @@ export default function AttendancePage() {
           className="px-3 py-1 rounded"
           style={{
             backgroundColor:
-              attendanceDates.indexOf(currentDate) ===
-              attendanceDates.length - 1
-                ? colors.switch
-                : colors.light,
-            color:
-              attendanceDates.indexOf(currentDate) ===
-              attendanceDates.length - 1
-                ? colors.wine
-                : colors.back,
-            cursor:
-              attendanceDates.indexOf(currentDate) ===
-              attendanceDates.length - 1
-                ? "not-allowed"
-                : "pointer",
+              currentDate >= latestDate ? colors.switch : colors.light,
+            color: currentDate >= latestDate ? colors.wine : colors.back,
+            cursor: currentDate >= latestDate ? "not-allowed" : "pointer",
           }}
           onClick={handleNextDay}
-          disabled={
-            attendanceDates.indexOf(currentDate) === attendanceDates.length - 1
-          }
+          disabled={currentDate >= latestDate}
         >
           Next Day
         </button>
       </div>
 
-      {/* Attendance Table */}
-      {attendancesForDate.length === 0 ? (
+      {filteredAttendances.length === 0 ? (
         <p className="text-lg" style={{ color: colors.wine }}>
           No attendance records found for {currentDate}.
         </p>
@@ -213,7 +204,7 @@ export default function AttendancePage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedAttendances.map((a, idx) => (
+              {pagedAttendances.map((a, idx) => (
                 <tr
                   key={a.id}
                   className="transition-colors duration-200 cursor-pointer"
@@ -266,41 +257,40 @@ export default function AttendancePage() {
             </tbody>
           </table>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex gap-2 mt-4 items-center">
-              <button
-                className="px-3 py-1 rounded"
-                style={{
-                  backgroundColor: colors.light,
-                  color: colors.back,
-                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                }}
-                onClick={handlePrevPage}
-                disabled={currentPage === 1}
-              >
-                Prev Page
-              </button>
+          {/* Pagination */}
+          <div className="flex gap-2 justify-center mt-2">
+            <button
+              className="px-3 py-1 rounded"
+              style={{
+                backgroundColor:
+                  currentPage === 1 ? colors.switch : colors.light,
+                color: currentPage === 1 ? colors.wine : colors.back,
+                cursor: currentPage === 1 ? "not-allowed" : "pointer",
+              }}
+              onClick={handlePrevPage}
+              disabled={currentPage === 1}
+            >
+              Previous Page
+            </button>
 
-              <span style={{ color: colors.wine }}>
-                Page {currentPage} of {totalPages}
-              </span>
+            <span style={{ color: colors.wine, alignSelf: "center" }}>
+              Page {currentPage} of {totalPages || 1}
+            </span>
 
-              <button
-                className="px-3 py-1 rounded"
-                style={{
-                  backgroundColor: colors.light,
-                  color: colors.back,
-                  cursor:
-                    currentPage === totalPages ? "not-allowed" : "pointer",
-                }}
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages}
-              >
-                Next Page
-              </button>
-            </div>
-          )}
+            <button
+              className="px-3 py-1 rounded"
+              style={{
+                backgroundColor:
+                  currentPage === totalPages ? colors.switch : colors.light,
+                color: currentPage === totalPages ? colors.wine : colors.back,
+                cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+              }}
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+            >
+              Next Page
+            </button>
+          </div>
         </>
       )}
     </div>
