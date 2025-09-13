@@ -127,8 +127,7 @@ export const useUsersStore = create<UsersStore>()(
       parentsForTeacher: (teacherId) =>
         Object.values(get().userMap)
           .filter((u) => u.teacherClasses?.some((c) => c.teacherId === teacherId))
-          .map((u) => u.parent)
-          .filter(Boolean) as User[],
+          .flatMap((u) => u.parents || []),
     }),
     { name: "users-store", getStorage: () => localStorage }
   )

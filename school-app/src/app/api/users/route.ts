@@ -45,13 +45,19 @@ export async function GET(req: NextRequest) {
     }
 
     const total = await prisma.user.count({ where });
-    const users = await prisma.user.findMany({
+    const usersRaw = await prisma.user.findMany({
       where,
       skip: (page - 1) * limit,
       take: limit,
       include: { parent: true, teacherClasses: true },
       orderBy: { name: "asc" },
     });
+
+    // Convert parent -> parents array
+    const users = usersRaw.map(u => ({
+      ...u,
+      parents: u.parent ? [u.parent] : [],
+    }));
 
     return NextResponse.json({ users, total });
   } catch (err) {

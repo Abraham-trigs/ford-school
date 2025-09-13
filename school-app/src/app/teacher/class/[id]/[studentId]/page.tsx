@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useUsersStore } from "@/lib/store/UserStore";
 import { User, UserRole } from "@/types/school";
 
@@ -12,9 +12,7 @@ interface Params {
 
 export default function StudentDetailPage({ params }: { params: Params }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { fetchUsers, userMap, studentsForTeacher, childrenForParent } =
-    useUsersStore();
+  const { fetchUsers, childrenForParent } = useUsersStore();
 
   const [student, setStudent] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,9 +22,11 @@ export default function StudentDetailPage({ params }: { params: Params }) {
     async function loadStudent() {
       setLoading(true);
       try {
-        // Fetch users from store/API
+        // Fetch all users from API/store
         await fetchUsers();
 
+        // Access latest userMap directly to avoid effect loop
+        const userMap = useUsersStore.getState().userMap;
         const studentData = userMap[params.studentId];
 
         if (!studentData) {
@@ -36,21 +36,24 @@ export default function StudentDetailPage({ params }: { params: Params }) {
 
         setStudent(studentData);
 
-        // If teacher, get all students for this class and their parents
+        let parents: User[] = [];
+
         if (studentData.role === UserRole.STUDENT) {
-          const teacherId = studentData.teacherClasses?.[0]?.teacherId || "";
-          const classStudents = studentsForTeacher(teacherId);
-          const parents = classStudents
-            .map((s) => s.parent)
-            .filter((p): p is User => !!p);
-          setRelatedParents(parents);
+          // Collect multiple parents if available
+          if (
+            Array.isArray(studentData.parents) &&
+            studentData.parents.length > 0
+          ) {
+            parents = studentData.parents;
+          } else if (studentData.parent) {
+            parents = [studentData.parent];
+          }
+        } else if (studentData.role === UserRole.PARENT) {
+          // Show children for parent
+          parents = childrenForParent(studentData.id);
         }
 
-        // If parent, fetch their children
-        if (studentData.role === UserRole.PARENT) {
-          const children = childrenForParent(studentData.id);
-          setRelatedParents(children);
-        }
+        setRelatedParents(parents);
       } catch (err) {
         console.error("Failed to load student:", err);
       } finally {
@@ -59,13 +62,7 @@ export default function StudentDetailPage({ params }: { params: Params }) {
     }
 
     loadStudent();
-  }, [
-    params.studentId,
-    fetchUsers,
-    router,
-    studentsForTeacher,
-    childrenForParent,
-  ]);
+  }, [params.studentId, fetchUsers, router, childrenForParent]);
 
   if (loading) return <p className="text-textSecondary">Loading details...</p>;
   if (!student) return <p className="text-textSecondary">Student not found</p>;
