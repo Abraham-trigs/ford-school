@@ -2,21 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-// Updated typing: parent is always included now
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  parent: { id: string; name: string; email: string } | null;
-}
-
-interface ClassDetail {
-  id: string;
-  name: string;
-  students: User[];
-  teacher: { id: string; name: string; email: string } | null;
-}
+import { useSchoolStore } from "@/lib/store/SchoolStore";
 
 interface Params {
   id: string;
@@ -24,28 +10,33 @@ interface Params {
 
 export default function ClassDetailPage({ params }: { params: Params }) {
   const router = useRouter();
-  const [classData, setClassData] = useState<ClassDetail | null>(null);
+  const fetchClassById = useSchoolStore((state) => state.fetchClassById);
+  const classesMap = useSchoolStore((state) => state.classesMap);
+
+  const [classData, setClassData] = useState<
+    (typeof classesMap)[string] | null
+  >(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchClass() {
+    async function loadClass() {
+      setLoading(true);
       try {
-        const res = await fetch(`/api/classes/${params.id}`);
-        if (!res.ok) {
-          if (res.status === 401) router.push("/login");
-          throw new Error("Failed to fetch class");
+        const cls = await fetchClassById(params.id);
+        if (!cls) {
+          router.push("/404"); // optional: redirect if class not found
+          return;
         }
-        const data: ClassDetail = await res.json();
-        setClassData(data);
-      } catch (error) {
-        console.error(error);
+        setClassData(cls);
+      } catch (err) {
+        console.error("Error loading class:", err);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchClass();
-  }, [params.id, router]);
+    loadClass();
+  }, [params.id, fetchClassById, router]);
 
   if (loading) return <p className="text-textSecondary">Loading...</p>;
   if (!classData) return <p className="text-textSecondary">Class not found</p>;
@@ -77,7 +68,7 @@ export default function ClassDetailPage({ params }: { params: Params }) {
                 Email: {student.email}
               </p>
               <p className="text-sm text-textSecondary">
-                Parent: {student.parent ? student.parent.name : "N/A"}
+                Parent: {student.parent?.name || "N/A"}
               </p>
             </li>
           ))}

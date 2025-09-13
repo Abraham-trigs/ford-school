@@ -31,6 +31,7 @@ interface SchoolStore {
   // ---------------- Classes ----------------
   fetchClasses: () => Promise<void>;
   fetchTeacherClasses: (teacherId: string) => Promise<void>;
+  fetchClassById: (id: string) => Promise<Class | undefined>;
   addClass: (cls: Omit<Class, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateClass: (id: string, data: Partial<Class>) => Promise<void>;
   deleteClass: (id: string) => Promise<void>;
@@ -193,6 +194,24 @@ export const useSchoolStore = create<SchoolStore>()(
           set({ classesMap, classIds });
         } catch (err) {
           console.error("fetchTeacherClasses error:", err);
+        } finally {
+          set({ classesLoading: false });
+        }
+      },
+
+      fetchClassById: async (id: string) => {
+        set({ classesLoading: true });
+        try {
+          const res = await fetch(`/api/classes/${id}`);
+          if (!res.ok) throw new Error("Failed to fetch class");
+          const cls: Class = await res.json();
+          set((state) => ({
+            classesMap: { ...state.classesMap, [id]: cls },
+            classIds: [...new Set([...state.classIds, id])],
+          }));
+          return cls;
+        } catch (err) {
+          console.error("fetchClassById error:", err);
         } finally {
           set({ classesLoading: false });
         }
