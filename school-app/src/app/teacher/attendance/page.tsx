@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSchoolStore } from "@/lib/store/SchoolStore";
+import { useAttendanceStore } from "@/lib/store/attendanceStore";
 import type { Attendance } from "@/types/users";
 
 const colors = {
@@ -14,9 +14,9 @@ const colors = {
 const PAGE_SIZE = 30;
 
 export default function AttendancePage() {
-  const fetchAttendance = useSchoolStore((state) => state.fetchAttendance);
-  const attendancesMap = useSchoolStore((state) => state.attendancesMap);
-  const attendanceIds = useSchoolStore((state) => state.attendanceIds);
+  const fetchAttendance = useAttendanceStore((state) => state.fetchAttendance);
+  const attendancesMap = useAttendanceStore((state) => state.attendancesMap);
+  const attendanceIds = useAttendanceStore((state) => state.attendanceIds);
 
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState<string>("");
