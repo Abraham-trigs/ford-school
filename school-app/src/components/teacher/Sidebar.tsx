@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 const links = [
   { name: "Dashboard", href: "/teacher" },
   { name: "Attendance", href: "/teacher/attendance" },
+  { name: "Class", href: "/teacher/class" },
   { name: "Assignments", href: "/teacher/assignments" },
   { name: "Grades", href: "/teacher/grades" },
   { name: "Messages", href: "/teacher/messages" },
