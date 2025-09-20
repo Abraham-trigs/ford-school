@@ -7,62 +7,164 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String      @id @default(cuid())
-  name      String
-  email     String      @unique
-  password  String?
-  role      SchoolRole
-  phone     String?
-  dob       DateTime?
-  gender    String?
-  photoUrl  String?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+// ------------------ USERS / ROLES ------------------
 
-  // Relations
-  teacherClasses      Class[]      @relation("TeacherClasses")       // Classes this user teaches
-  children            User[]       @relation("ParentChildren")       // Children of this parent
-  parent              User?        @relation("ParentChildren", fields: [parentId], references: [id]) // Parent of this student
-  parentId            String?                                       // optional, only for STUDENT
-  classesAttended     Class[]      @relation("ClassStudents")       // Classes this student is enrolled in
-  attendanceAsStudent Attendance[] @relation("AttendanceStudent")   // Attendance of this student
-  attendanceRecorded  Attendance[] @relation("AttendanceRecorder")  // Attendance recorded by this user
-}
-
-model Class {
-  id        String   @id @default(cuid())
-  name      String
-  teacherId String?  // optional in case class not assigned yet
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
-
-  teacher   User?    @relation("TeacherClasses", fields: [teacherId], references: [id])
-  students  User[]   @relation("ClassStudents")
-  attendances Attendance[] @relation("ClassAttendances") // back-relation for Attendance
-}
-model Attendance {
-  id           String    @id @default(cuid())
-  studentId    String
-  classId      String
-  date         DateTime
-  status       AttendanceStatus
-  note         String?
-  createdAt    DateTime  @default(now())
-  recordedById String
-
-  // Relations
-  class       Class @relation("ClassAttendances", fields: [classId], references: [id])
-  student     User  @relation("AttendanceStudent", fields: [studentId], references: [id])
-  recordedBy  User  @relation("AttendanceRecorder", fields: [recordedById], references: [id])
-}
-enum SchoolRole {
+enum Role {
+  SUPERADMIN
+  ADMIN
+  TEACHER
+  SECRETARY
+  ACCOUNTANT
+  LIBRARIAN
+  COUNSELOR
+  NURSE
+  CLEANER
+  SECURITY
+  JANITOR
+  COOK
+  KITCHEN_ASSISTANT
   STUDENT
   PARENT
-  TEACHER
-  ADMIN
-  HEADMASTER
-  PROPRIETOR
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String?   @unique
+  phone        String?
+  password     String
+  role         Role
+  profilePic   String?
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  staff        Staff?
+  student      Student?
+  parentOf     Student[] @relation("ParentChild")
+  attendanceRecords AttendanceRecord[]
+  payments     Payment[]
+  invoices     Invoice[]
+  createdEvents SchoolEvent[] @relation("EventCreator")
+  visitedLogs  VisitorLog[] @relation("VisitorCreated")
+  checkedVisitors VisitorLog[] @relation("VisitorVisited")
+
+  // Library relations
+  borrowedBooks LibraryLog[]
+  
+  // Transport relations
+  drivingVehicles TransportVehicle[]
+  
+  // Discipline
+  issuedDisciplineLogs DisciplineLog[]
+  
+  // Announcements
+  createdAnnouncements Announcement[]
+}
+
+// ------------------ STAFF ------------------
+
+model Staff {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  position  String   // e.g., "Accountant", "Librarian", "Security"
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// ------------------ STUDENTS ------------------
+
+model Student {
+  id            String    @id @default(cuid())
+  studentId     String    @unique
+  name          String
+  email         String?   @unique
+  phone         String?
+  admissionDate DateTime?
+  graduationDate DateTime?
+  class         String?
+  rollNumber    String?
+  profilePic    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  invoices      Invoice[]
+  payments      Payment[]
+  examResults   StudentResult[]
+  sections      StudentSection[]
+  promotions    Promotion[]
+  reportCards   ReportCard[]
+  parents       User[] @relation("ParentChild")
+  
+  // Meal relations
+  mealOrders    MealOrder[]
+  
+  // Discipline relations
+  disciplineLogs DisciplineLog[]
+}
+
+// ------------------ CLASSES / SECTIONS ------------------
+
+model Class {
+  id        String    @id @default(cuid())
+  name      String
+  level     String?
+  sections  Section[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  name      String
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  students  StudentSection[]
+  subjects  SubjectAssignment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentSection {
+  id        String   @id @default(cuid())
+  studentId String
+  sectionId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  section   Section  @relation(fields: [sectionId], references: [id])
+  enrolledAt DateTime @default(now())
+}
+
+// ------------------ SUBJECTS / TEACHERS ------------------
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String?
+  assignments SubjectAssignment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SubjectAssignment {
+  id        String   @id @default(cuid())
+  subjectId String
+  sectionId String
+  teacherId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  section   Section  @relation(fields: [sectionId], references: [id])
+  teacher   User     @relation(fields: [teacherId], references: [id])
+}
+
+// ------------------ ATTENDANCE ------------------
+
+enum AttendanceSessionType {
+  STUDENT_CLASS
+  STAFF_WORK
 }
 
 enum AttendanceStatus {
@@ -70,4 +172,507 @@ enum AttendanceStatus {
   ABSENT
   LATE
   EXCUSED
+}
+
+model AttendanceSession {
+  id                String   @id @default(cuid())
+  date              DateTime
+  classId           String?
+  class             Class?   @relation(fields: [classId], references: [id])
+  takenById         String
+  takenBy           User     @relation(fields: [takenById], references: [id])
+  type              AttendanceSessionType
+  financeControlled Boolean? @default(false)
+  financeImpactPerDay Float?
+  records           AttendanceRecord[]
+  createdAt         DateTime @default(now())
+}
+
+model AttendanceRecord {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   AttendanceSession @relation(fields: [sessionId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  status    AttendanceStatus
+  remarks   String?
+  checkIn   DateTime?
+  checkOut  DateTime?
+}
+
+// ------------------ FINANCE ------------------
+
+enum PaymentType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  TERMLY
+  YEARLY
+  ONE_TIME
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  MOBILE_MONEY
+  CARD
+  CHEQUE
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum ReceiptType {
+  FULL_PAYMENT
+  PART_PAYMENT
+  REFUND
+}
+
+enum ReceiptStatus {
+  ISSUED
+  REPRINTED
+  CANCELLED
+}
+
+model FeeCategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isRecurring Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  payments    FeePayment[]
+}
+
+model FeePayment {
+  id           String      @id @default(cuid())
+  student      User        @relation(fields: [studentId], references: [id])
+  studentId    String
+  category     FeeCategory @relation(fields: [categoryId], references: [id])
+  categoryId   String
+  amount       Float
+  paymentType  PaymentType
+  datePaid     DateTime    @default(now())
+  reference    String?
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id])
+  feeCategoryId String?
+  feeCategory   FeeCategory? @relation(fields: [feeCategoryId], references: [id])
+  amount        Float
+  status        InvoiceStatus @default(UNPAID)
+  issuedAt      DateTime      @default(now())
+  dueDate       DateTime?
+  paidAt        DateTime?
+  issuedBy      String
+  notes         String?
+  receipts      Receipt[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id])
+  invoiceId      String?
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id])
+  amount         Float
+  method         PaymentMethod
+  transactionRef String?  @unique
+  status         PaymentStatus @default(PENDING)
+  paidAt         DateTime?
+  confirmedAt    DateTime?
+  receipt        Receipt?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Receipt {
+  id            String       @id @default(cuid())
+  receiptNumber String       @unique
+  paymentId     String
+  payment       Payment      @relation(fields: [paymentId], references: [id])
+  invoiceId     String?
+  invoice       Invoice?     @relation(fields: [invoiceId], references: [id])
+  type          ReceiptType
+  status        ReceiptStatus @default(ISSUED)
+  issuedAt      DateTime      @default(now())
+  reprintedAt   DateTime?
+  issuedBy      String
+  digitalStamp  String?
+  qrCodeUrl     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model ReceiptCounter {
+  id        Int      @id @default(1)
+  year      Int
+  lastSeq   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model InvoiceCounter {
+  id        Int      @id @default(1)
+  year      Int
+  lastSeq   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------ EXAMS / RESULTS ------------------
+
+enum ExamType {
+  MIDTERM
+  ENDTERM
+  MOCK
+  FINAL
+  WAEC
+  OTHER
+}
+
+model ExamSession {
+  id            String      @id @default(cuid())
+  name          String
+  academicYear  String
+  term          Int
+  startDate     DateTime
+  endDate       DateTime
+  examType      ExamType
+  requiredFeeId String?
+  requiredFee   FeeCategory? @relation(fields: [requiredFeeId], references: [id])
+  examPapers    ExamPaper[]
+  reportCards   ReportCard[]
+  createdAt     DateTime    @default(now())
+}
+
+model ExamPaper {
+  id            String      @id @default(cuid())
+  subjectId     String
+  subject       Subject     @relation(fields: [subjectId], references: [id])
+  classId       String
+  class         Class       @relation(fields: [classId], references: [id])
+  examSessionId String
+  examSession   ExamSession @relation(fields: [examSessionId], references: [id])
+  maxScore      Int         @default(100)
+  weightage     Float?      @default(1.0)
+  results       StudentResult[]
+}
+
+model StudentResult {
+  id            String      @id @default(cuid())
+  studentId     String
+  student       Student     @relation(fields: [studentId], references: [id])
+  examPaperId   String
+  examPaper     ExamPaper   @relation(fields: [examPaperId], references: [id])
+  score         Float
+  grade         String?
+  remarks       String?
+}
+
+model ReportCard {
+  id            String      @id @default(cuid())
+  studentId     String
+  student       Student     @relation(fields: [studentId], references: [id])
+  examSessionId String
+  examSession   ExamSession @relation(fields: [examSessionId], references: [id])
+  totalScore    Float
+  averageScore  Float
+  position      Int?
+  overallGrade  String?
+  remarks       String?
+  createdAt     DateTime    @default(now())
+}
+
+// ------------------ PROMOTIONS ------------------
+
+enum PromotionDecision {
+  PROMOTED
+  REPEATED
+  WITHHELD
+}
+
+model Promotion {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id])
+  fromClassId   String
+  fromClass     Class    @relation("FromClass", fields: [fromClassId], references: [id])
+  toClassId     String
+  toClass       Class    @relation("ToClass", fields: [toClassId], references: [id])
+  academicYear  String
+  term          Int?
+  decision      PromotionDecision
+  remarks       String?
+  reportCardId  String?
+  reportCard    ReportCard? @relation(fields: [reportCardId], references: [id])
+  decidedById   String
+  decidedBy     User        @relation("PromotionDecider", fields: [decidedById], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+// ------------------ ASSETS ------------------
+
+enum AssetCategory {
+  CLASSROOM
+  LAB
+  LIBRARY
+  KITCHEN
+  OFFICE
+  TRANSPORT
+  OTHER
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AssetAction {
+  ADDED
+  REMOVED
+  MAINTENANCE
+  TRANSFER
+  DISPOSED
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  category    AssetCategory
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  quantity    Int       @default(1)
+  condition   AssetCondition
+  location    String?
+  acquiredAt  DateTime?
+  warrantyExpiry DateTime?
+  serialNumber String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  logs        AssetLog[]
+}
+
+model AssetLog {
+  id        String    @id @default(cuid())
+  assetId   String
+  asset     Asset     @relation(fields: [assetId], references: [id])
+  action    AssetAction
+  quantity  Int
+  notes     String?
+  performedById String
+  performedBy   User  @relation(fields: [performedById], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  staff       User[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ------------------ VISITORS / EVENTS ------------------
+
+enum VisitorStatus {
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+}
+
+model VisitorLog {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  purpose       String
+  visitedUserId String?
+  visitedUser   User?    @relation("VisitorVisited", fields: [visitedUserId], references: [id])
+  checkIn       DateTime
+  checkOut      DateTime?
+  status        VisitorStatus @default(CHECKED_IN)
+  notes         String?
+  createdById   String
+  createdBy     User     @relation("VisitorCreated", fields: [createdById], references: [id])
+  expectedDuration Int?
+  approvedById  String?
+  approvedBy    User?    @relation(fields: [approvedById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum EventType {
+  HOLIDAY
+  EXAM
+  ASSEMBLY
+  CELEBRATION
+  MEETING
+  OTHER
+}
+
+model SchoolEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  eventType   EventType
+  startDate   DateTime
+  endDate     DateTime
+  location    String?
+  isPublic    Boolean   @default(true)
+  createdById String
+  createdBy   User      @relation("EventCreator", fields: [createdById], references: [id])
+  participants User[]   @relation("EventParticipants")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ------------------ LIBRARY ------------------
+
+model LibraryBook {
+  id          String   @id @default(cuid())
+  title       String
+  author      String?
+  isbn        String?  @unique
+  category    String?
+  totalCopies Int      @default(1)
+  available   Int      @default(1)
+  addedAt     DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  logs        LibraryLog[]
+}
+
+enum LibraryAction {
+  BORROWED
+  RETURNED
+  LOST
+  DAMAGED
+  ADDED
+}
+
+model LibraryLog {
+  id        String   @id @default(cuid())
+  bookId    String
+  book      LibraryBook @relation(fields: [bookId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    LibraryAction
+  date      DateTime @default(now())
+  notes     String?
+}
+
+// ------------------ TRANSPORT ------------------
+
+model TransportVehicle {
+  id          String   @id @default(cuid())
+  vehicleNo   String   @unique
+  type        String   // e.g., "Bus", "Van", "Car"
+  capacity    Int
+  driverId    String?  
+  driver      User?    @relation(fields: [driverId], references: [id])
+  routeId     String?
+  route       TransportRoute? @relation(fields: [routeId], references: [id])
+  acquiredAt  DateTime?
+  condition   AssetCondition
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TransportRoute {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  stops       TransportStop[]
+  vehicles    TransportVehicle[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TransportStop {
+  id        String   @id @default(cuid())
+  routeId   String
+  route     TransportRoute @relation(fields: [routeId], references: [id])
+  name      String
+  location  String?
+  order     Int
+}
+
+// ------------------ MEALS ------------------
+
+model MealPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  availableOn DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      MealOrder[]
+}
+
+model MealOrder {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  mealPlanId String
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id])
+  quantity   Int      @default(1)
+  totalPrice Float
+  orderedAt  DateTime @default(now())
+  status     String   @default("PENDING") // Could create enum: PENDING, SERVED, CANCELLED
+}
+
+// ------------------ DISCIPLINE ------------------
+
+enum DisciplineType {
+  WARNING
+  SUSPENSION
+  EXPULSION
+  NOTE
+}
+
+model DisciplineLog {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  issuedById String
+  issuedBy  User     @relation(fields: [issuedById], references: [id])
+  type      DisciplineType
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+// ------------------ ANNOUNCEMENTS ------------------
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  audience    String   // e.g., "ALL", "STUDENTS", "STAFF", "PARENTS"
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  startDate   DateTime
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
