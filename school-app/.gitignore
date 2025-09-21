@@ -19,6 +19,9 @@
 #environement files
 .env 
 
+#personal files
+STEPS.md
+
 # misc
 .DS_Store
 *.pem

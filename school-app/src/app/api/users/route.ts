@@ -1,67 +1,82 @@
-"use server";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { verifyJwtFromHeader, requireRoles } from "@/lib/auth";
 
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import jwt from "jsonwebtoken";
-
-const SECRET = process.env.JWT_SECRET!;
-
-async function getSessionUser(req: NextRequest) {
+/**
+ * GET /api/users
+ * - SuperAdmin: full access
+ * - Admin: full access (⚠️ later restrict to department if departments exist)
+ * - Secretary: can view all
+ * - Accountant / Librarian: read-only (all users)
+ * - Teacher: only students in assigned section (TODO)
+ * - Counselor / Nurse: only assigned students (TODO)
+ * - Student: only self
+ * - Parent: only own children (TODO)
+ * - Cleaner / Janitor / Cook / KitchenAssistant: no access
+ */
+export async function GET(req: Request) {
   try {
-    const token = req.cookies.get("session")?.value;
-    if (!token) return null;
-    const decoded = jwt.verify(token, SECRET) as { id: string; role: string };
-    return await prisma.user.findUnique({ where: { id: decoded.id } });
-  } catch {
-    return null;
-  }
-}
+    const authHeader = req.headers.get("authorization") ?? undefined;
+    const caller = await verifyJwtFromHeader(authHeader);
+    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-export async function GET(req: NextRequest) {
-  try {
-    const sessionUser = await getSessionUser(req);
-    if (!sessionUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let where: any = {};
 
-    const url = new URL(req.url);
-    const page = parseInt(url.searchParams.get("page") || "1", 10);
-    const limit = parseInt(url.searchParams.get("limit") || "50", 10);
-    const search = url.searchParams.get("search") || "";
+    switch (caller.role) {
+      case "SUPERADMIN":
+      case "ADMIN":
+      case "SECRETARY":
+      case "ACCOUNTANT":
+      case "LIBRARIAN":
+        // ✅ can view all users
+        where = {};
+        break;
 
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-      ];
+      case "TEACHER":
+        // ⚠️ TODO: implement filtering by assigned section
+        return NextResponse.json({ error: "Teachers can only view assigned students (not implemented)" }, { status: 403 });
+
+      case "COUNSELOR":
+      case "NURSE":
+        // ⚠️ TODO: implement filtering by assigned students
+        return NextResponse.json({ error: `${caller.role} can only view assigned students (not implemented)` }, { status: 403 });
+
+      case "STUDENT":
+        // ✅ can only view self
+        where = { id: caller.userId };
+        break;
+
+      case "PARENT":
+        // ⚠️ TODO: implement filtering by own children
+        return NextResponse.json({ error: "Parents can only view own children (not implemented)" }, { status: 403 });
+
+      // ❌ No access
+      case "CLEANER":
+      case "JANITOR":
+      case "COOK":
+      case "KITCHEN_ASSISTANT":
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+      default:
+        return NextResponse.json({ error: "Role not recognized" }, { status: 400 });
     }
 
-    if (sessionUser.role === "TEACHER") {
-      const classes = await prisma.class.findMany({
-        where: { teacherId: sessionUser.id },
-        include: { students: true },
-      });
-      const studentIds = classes.flatMap((c) => c.students.map((s) => s.id));
-      where.id = { in: studentIds };
-    }
-
-    const total = await prisma.user.count({ where });
-    const usersRaw = await prisma.user.findMany({
+    const users = await prisma.user.findMany({
       where,
-      skip: (page - 1) * limit,
-      take: limit,
-      include: { parent: true, teacherClasses: true },
-      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
     });
 
-    // Convert parent -> parents array
-    const users = usersRaw.map(u => ({
-      ...u,
-      parents: u.parent ? [u.parent] : [],
-    }));
-
-    return NextResponse.json({ users, total });
-  } catch (err) {
+    return NextResponse.json(users);
+  } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
   }
 }
