@@ -10,6 +10,15 @@ import { verifyJwtFromHeader } from "@/lib/auth";
  * - Student: only self
  * - Parent: only their children (TODO)
  * - Cleaner/Janitor/Cook/KitchenAssistant: no access
+ *
+ * PUT /api/users/[id]
+ * - SuperAdmin/Admin: can update any user
+ * - Student: can update own profile
+ * - All others: forbidden
+ *
+ * DELETE /api/users/[id]
+ * - SuperAdmin/Admin: can delete any user
+ * - All others: forbidden
  */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
@@ -64,6 +73,51 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(user);
+  } catch (err: any) {
+    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const authHeader = req.headers.get("authorization") ?? undefined;
+    const caller = await verifyJwtFromHeader(authHeader);
+    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { id } = params;
+    const body = await req.json();
+
+    // SUPERADMIN and ADMIN can update anyone
+    if (["SUPERADMIN", "ADMIN"].includes(caller.role)) {
+      const updated = await prisma.user.update({ where: { id }, data: body });
+      return NextResponse.json(updated);
+    }
+
+    // STUDENT can only update self
+    if (caller.role === "STUDENT" && caller.userId === id) {
+      const updated = await prisma.user.update({ where: { id }, data: body });
+      return NextResponse.json(updated);
+    }
+
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } catch (err: any) {
+    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const authHeader = req.headers.get("authorization") ?? undefined;
+    const caller = await verifyJwtFromHeader(authHeader);
+    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    if (!["SUPERADMIN", "ADMIN"].includes(caller.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = params;
+    await prisma.user.delete({ where: { id } });
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
   }

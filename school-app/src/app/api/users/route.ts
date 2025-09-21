@@ -13,6 +13,11 @@ import { verifyJwtFromHeader, requireRoles } from "@/lib/auth";
  * - Student: only self
  * - Parent: only own children (TODO)
  * - Cleaner / Janitor / Cook / KitchenAssistant: no access
+ *
+ * POST /api/users
+ * - SuperAdmin: can create any user
+ * - Admin: can create users (⚠️ later restrict to department)
+ * - All other roles: forbidden
  */
 export async function GET(req: Request) {
   try {
@@ -75,6 +80,34 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(users);
+  } catch (err: any) {
+    console.error(err);
+    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const authHeader = req.headers.get("authorization") ?? undefined;
+    const caller = await verifyJwtFromHeader(authHeader);
+    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    if (!["SUPERADMIN", "ADMIN"].includes(caller.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { name, email, password, phone, role } = body;
+
+    if (!name || !email || !password || !role) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const user = await prisma.user.create({
+      data: { name, email, password, phone, role, status: "ACTIVE" },
+    });
+
+    return NextResponse.json(user, { status: 201 });
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
