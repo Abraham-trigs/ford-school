@@ -1,61 +1,59 @@
+// src/app/api/users/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyJwtFromHeader, requireRoles } from "@/lib/auth";
+import { verifyJwtFromHeader } from "@/lib/auth";
+import bcrypt from "bcryptjs";
 
 /**
- * GET /api/users
- * - SuperAdmin: full access
- * - Admin: full access (⚠️ later restrict to department if departments exist)
- * - Secretary: can view all
- * - Accountant / Librarian: read-only (all users)
- * - Teacher: only students in assigned section (TODO)
- * - Counselor / Nurse: only assigned students (TODO)
- * - Student: only self
- * - Parent: only own children (TODO)
- * - Cleaner / Janitor / Cook / KitchenAssistant: no access
- *
  * POST /api/users
  * - SuperAdmin: can create any user
- * - Admin: can create users (⚠️ later restrict to department)
- * - All other roles: forbidden
+ * - Admin: can create staff/students/parents (⚠️ later restrict by department)
+ * - Secretary: can create students + parents only
+ * - Accountant/Librarian: ❌ cannot create
+ * - Teacher/Counselor/Nurse/Student/Parent: ❌ cannot create
+ * - Service roles (Cleaner, Janitor, Cook, KitchenAssistant): ❌ no access
  */
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization") ?? undefined;
     const caller = await verifyJwtFromHeader(authHeader);
     if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    let where: any = {};
+    const body = await req.json();
+    const { name, email, password, phone, role } = body;
 
+    if (!name || !email || !password || !role) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // role-based permission check
     switch (caller.role) {
       case "SUPERADMIN":
+        // ✅ can create any role
+        break;
+
       case "ADMIN":
+        // ✅ can create staff/students/parents
+        if (["SUPERADMIN"].includes(role)) {
+          return NextResponse.json({ error: "Admins cannot create SuperAdmins" }, { status: 403 });
+        }
+        break;
+
       case "SECRETARY":
+        // ✅ can create students + parents only
+        if (!["STUDENT", "PARENT"].includes(role)) {
+          return NextResponse.json({ error: "Secretaries can only create students or parents" }, { status: 403 });
+        }
+        break;
+
+      // ❌ no creation access
       case "ACCOUNTANT":
       case "LIBRARIAN":
-        // ✅ can view all users
-        where = {};
-        break;
-
       case "TEACHER":
-        // ⚠️ TODO: implement filtering by assigned section
-        return NextResponse.json({ error: "Teachers can only view assigned students (not implemented)" }, { status: 403 });
-
       case "COUNSELOR":
       case "NURSE":
-        // ⚠️ TODO: implement filtering by assigned students
-        return NextResponse.json({ error: `${caller.role} can only view assigned students (not implemented)` }, { status: 403 });
-
       case "STUDENT":
-        // ✅ can only view self
-        where = { id: caller.userId };
-        break;
-
       case "PARENT":
-        // ⚠️ TODO: implement filtering by own children
-        return NextResponse.json({ error: "Parents can only view own children (not implemented)" }, { status: 403 });
-
-      // ❌ No access
       case "CLEANER":
       case "JANITOR":
       case "COOK":
@@ -66,8 +64,18 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Role not recognized" }, { status: 400 });
     }
 
-    const users = await prisma.user.findMany({
-      where,
+    // hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        role,
+        password: hashedPassword,
+        status: "ACTIVE",
+      },
       select: {
         id: true,
         name: true,
@@ -79,37 +87,12 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json(users);
+    return NextResponse.json(newUser, { status: 201 });
   } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const authHeader = req.headers.get("authorization") ?? undefined;
-    const caller = await verifyJwtFromHeader(authHeader);
-    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    if (!["SUPERADMIN", "ADMIN"].includes(caller.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const body = await req.json();
-    const { name, email, password, phone, role } = body;
-
-    if (!name || !email || !password || !role) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    const user = await prisma.user.create({
-      data: { name, email, password, phone, role, status: "ACTIVE" },
-    });
-
-    return NextResponse.json(user, { status: 201 });
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error", details: err.message },
+      { status: 500 }
+    );
   }
 }
