@@ -1,10 +1,10 @@
+// File: /app/api/auth/session/route.ts
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import prisma from "@/lib/prisma";
 
-const SECRET = process.env.JWT_SECRET!;
+const SECRET = process.env.JWT_SECRET as string;
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,24 +14,31 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ loggedIn: false, user: null });
     }
 
-    const decoded = jwt.verify(token, SECRET) as {
-      id: string;
-      email: string;
-      role: string;
-    };
+    let decoded: { id: string; email: string; role: string; name?: string };
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, name: true, email: true, role: true },
-    });
-
-    if (!user) {
+    try {
+      decoded = jwt.verify(token, SECRET) as {
+        id: string;
+        email: string;
+        role: string;
+        name?: string;
+      };
+    } catch (err) {
+      console.error("JWT verification failed:", err);
       return NextResponse.json({ loggedIn: false, user: null });
     }
 
-    return NextResponse.json({ loggedIn: true, user });
+    return NextResponse.json({
+      loggedIn: true,
+      user: {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+        name: decoded.name || "",
+      },
+    });
   } catch (err) {
-    console.error("Session verification error:", err);
-    return NextResponse.json({ loggedIn: false, user: null });
+    console.error("Session fetch error:", err);
+    return NextResponse.json({ loggedIn: false, user: null }, { status: 500 });
   }
 }

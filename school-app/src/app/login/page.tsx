@@ -25,23 +25,41 @@ export default function LoginPage() {
 
   const redirectByRole = (role: string) => {
     switch (role) {
+      case "SUPERADMIN":
+        router.replace("/superadmin/dashboard");
+        break;
       case "ADMIN":
-        router.replace("/admin");
+        router.replace("/admin/dashboard");
         break;
       case "TEACHER":
-        router.replace("/teacher");
+        router.replace("/teacher/dashboard");
+        break;
+      case "SECRETARY":
+        router.replace("/secretary/dashboard");
+        break;
+      case "ACCOUNTANT":
+        router.replace("/accountant/dashboard");
+        break;
+      case "LIBRARIAN":
+        router.replace("/librarian/dashboard");
+        break;
+      case "COUNSELOR":
+        router.replace("/counselor/dashboard");
+        break;
+      case "NURSE":
+        router.replace("/nurse/dashboard");
+        break;
+      case "CLEANER":
+      case "JANITOR":
+      case "COOK":
+      case "KITCHEN_ASSISTANT":
+        router.replace("/staff/dashboard");
         break;
       case "STUDENT":
-        router.replace("/student");
+        router.replace("/student/dashboard");
         break;
       case "PARENT":
-        router.replace("/parent");
-        break;
-      case "HEADMASTER":
-        router.replace("/headmaster");
-        break;
-      case "PROPRIETOR":
-        router.replace("/proprietor");
+        router.replace("/parent/dashboard");
         break;
       default:
         router.replace("/");
@@ -52,18 +70,14 @@ export default function LoginPage() {
     setError("");
 
     try {
-      await login(email, password); // ✅ use store login
+      await login(email, password);
 
-      if (
-        useSessionStore.getState().loggedIn &&
-        useSessionStore.getState().user
-      ) {
-        redirectByRole(useSessionStore.getState().user!.role);
-      }
+      const { loggedIn, user } = useSessionStore.getState();
+      if (loggedIn && user) redirectByRole(user.role);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Login failed. Please try again.";
-      setError(message);
+      setError(
+        err instanceof Error ? err.message : "Login failed. Please try again."
+      );
     }
   };
 
@@ -75,11 +89,7 @@ export default function LoginPage() {
 
   const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.5, ease: easeOut },
-    },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: easeOut } },
   };
 
   return (

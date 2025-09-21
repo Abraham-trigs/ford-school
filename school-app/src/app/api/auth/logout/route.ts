@@ -1,22 +1,21 @@
+// File: /app/api/auth/logout/route.ts
 export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    // create response
-    const response = NextResponse.json({
-      success: true,
-      message: "Logged out successfully",
-    });
+    const response = NextResponse.json({ success: true, message: "Logged out" });
 
-    // clear the session cookie
-    response.cookies.set("session", "", {
+    // Clear the JWT cookie
+    response.cookies.set({
+      name: "session",
+      value: "",
       httpOnly: true,
       path: "/",
-      expires: new Date(0), // expire immediately
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
+      maxAge: 0, // expires immediately
     });
 
     return response;

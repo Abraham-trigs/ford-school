@@ -26,13 +26,13 @@ interface SessionStore {
   clearRole: () => void;
 }
 
-export const useSessionStore = create<SessionStore>((set) => ({
+export const useSessionStore = create<SessionStore>((set, get) => ({
   user: null,
   loggedIn: false,
   loading: false,
   role: null,
 
-  // --- fetch session from backend cookie ---
+  // --- fetch session from JWT cookie ---
   fetchSession: async () => {
     set({ loading: true });
     try {
@@ -60,7 +60,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
     }
   },
 
-  // --- login with email/password ---
+  // --- login via API + sync session from cookie ---
   login: async (email: string, password: string) => {
     set({ loading: true });
     try {
@@ -73,8 +73,8 @@ export const useSessionStore = create<SessionStore>((set) => ({
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // fetch session again so state matches cookie
-        await useSessionStore.getState().fetchSession();
+        // fetch session again so state matches the JWT cookie
+        await get().fetchSession();
       } else {
         throw new Error(data.message || "Login failed");
       }
@@ -87,14 +87,15 @@ export const useSessionStore = create<SessionStore>((set) => ({
     }
   },
 
-  // --- logout (clear cookie + state) ---
+  // --- logout: clear cookie + reset store ---
   logout: async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch (err) {
       console.error("logout error:", err);
+    } finally {
+      set({ user: null, loggedIn: false, loading: false, role: null });
     }
-    set({ user: null, loggedIn: false, loading: false, role: null });
   },
 
   setRole: (role: string) => set({ role }),
