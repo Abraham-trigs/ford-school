@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const caller = await verifyJwtFromHeader(authHeader);
     if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, email, password, phone, role } = await req.json();
+    const { name, email, password, phone, role, status } = await req.json();
     if (!name || !email || !password || !role) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -24,40 +24,28 @@ export async function POST(req: Request) {
     // Role-based permission check
     switch (caller.role) {
       case "SUPERADMIN":
-        // ✅ can create any role
-        break;
+        break; // can create any role
       case "ADMIN":
-        // ✅ can create staff/students/parents
-        if (["SUPERADMIN"].includes(role)) {
-          return NextResponse.json({ error: "Admins cannot create SuperAdmins" }, { status: 403 });
-        }
+        if (["SUPERADMIN"].includes(role)) return NextResponse.json({ error: "Admins cannot create SuperAdmins" }, { status: 403 });
         break;
       case "SECRETARY":
-        // ✅ can create students + parents only
-        if (!["STUDENT", "PARENT"].includes(role)) {
-          return NextResponse.json({ error: "Secretaries can only create students or parents" }, { status: 403 });
-        }
+        if (!["STUDENT", "PARENT"].includes(role)) return NextResponse.json({ error: "Secretaries can only create students or parents" }, { status: 403 });
         break;
-      // ❌ no creation access
-      case "ACCOUNTANT":
-      case "LIBRARIAN":
-      case "TEACHER":
-      case "COUNSELOR":
-      case "NURSE":
-      case "STUDENT":
-      case "PARENT":
-      case "CLEANER":
-      case "JANITOR":
-      case "COOK":
-      case "KITCHEN_ASSISTANT":
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       default:
-        return NextResponse.json({ error: "Role not recognized" }, { status: 400 });
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = await prisma.user.create({
-      data: { name, email, phone, role, password: hashedPassword, status: "ACTIVE" },
+      data: {
+        name,
+        email,
+        phone,
+        role,
+        password: hashedPassword,
+        status: status ?? "ACTIVE", // default ACTIVE if not provided
+      },
       select: { id: true, name: true, email: true, phone: true, role: true, status: true, createdAt: true },
     });
 
@@ -77,34 +65,19 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     const { id } = params;
 
+    // Role-based fetch permissions
     switch (caller.role) {
       case "SUPERADMIN":
       case "ADMIN":
       case "SECRETARY":
       case "ACCOUNTANT":
       case "LIBRARIAN":
-        // ✅ can fetch any user
-        break;
-      case "TEACHER":
-        // ⚠️ TODO: validate that this user is a student in teacher’s section
-        return NextResponse.json({ error: "Teachers can only view assigned students (not implemented)" }, { status: 403 });
-      case "COUNSELOR":
-      case "NURSE":
-        // ⚠️ TODO: validate that this user is one of counselor’s/nurse’s assigned students
-        return NextResponse.json({ error: `${caller.role} can only view assigned students (not implemented)` }, { status: 403 });
+        break; // can fetch any user
       case "STUDENT":
         if (caller.userId !== id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         break;
-      case "PARENT":
-        // ⚠️ TODO: validate that this user is one of the parent’s children
-        return NextResponse.json({ error: "Parents can only view own children (not implemented)" }, { status: 403 });
-      case "CLEANER":
-      case "JANITOR":
-      case "COOK":
-      case "KITCHEN_ASSISTANT":
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       default:
-        return NextResponse.json({ error: "Role not recognized" }, { status: 400 });
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const user = await prisma.user.findUnique({
@@ -129,19 +102,23 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const { id } = params;
     const body = await req.json();
 
-    // SUPERADMIN and ADMIN can update anyone
-    if (["SUPERADMIN", "ADMIN"].includes(caller.role)) {
-      const updated = await prisma.user.update({ where: { id }, data: body });
-      return NextResponse.json(updated);
+    // Only allow status updates if caller has permission
+    if (body.status && !["SUPERADMIN", "ADMIN"].includes(caller.role)) {
+      return NextResponse.json({ error: "Only SuperAdmin/Admin can update user status" }, { status: 403 });
     }
 
-    // STUDENT can only update self
+    // Admin cannot set SUSPENDED status, only SuperAdmin can
+    if (body.status === "SUSPENDED" && caller.role !== "SUPERADMIN") {
+      return NextResponse.json({ error: "Only SuperAdmin can suspend a user" }, { status: 403 });
+    }
+
+    // STUDENT can update self (excluding status)
     if (caller.role === "STUDENT" && caller.userId === id) {
-      const updated = await prisma.user.update({ where: { id }, data: body });
-      return NextResponse.json(updated);
+      delete body.status;
     }
 
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const updated = await prisma.user.update({ where: { id }, data: body });
+    return NextResponse.json(updated);
   } catch (err: any) {
     return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
   }
@@ -158,7 +135,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
     const { id } = params;
 
-    // ⚠️ Optional: prevent deletion of SuperAdmin by non-SuperAdmin
     const targetUser = await prisma.user.findUnique({ where: { id } });
     if (!targetUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
     if (targetUser.role === "SUPERADMIN" && caller.role !== "SUPERADMIN") {
