@@ -1,5 +1,5 @@
 // prisma.config.ts
-import type { Config } from "@prisma/client";
+import type {Config }  from "@prisma/client";
 
 const config: Config = {
   // Future-proof: seed command for Prisma >= 6

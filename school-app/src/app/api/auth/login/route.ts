@@ -2,11 +2,11 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
+import { signToken } from "@/lib/apiHelpers";
+import { Role } from "@/types/school";
 
-const SECRET = process.env.JWT_SECRET as string;
-const EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,14 +46,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate JWT token including `name`
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, name: user.name },
-      SECRET,
-      { expiresIn: EXPIRES_IN }
-    );
+    // Generate JWT token via helper
+    const token = signToken({
+      id: user.id,
+      role: user.role as Role,
+    });
 
-    // Respond with user info
+    // Respond with user info (exclude sensitive data)
     const response = NextResponse.json({
       success: true,
       user: {
@@ -72,7 +71,7 @@ export async function POST(req: NextRequest) {
       path: "/",
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: COOKIE_MAX_AGE,
     });
 
     return response;

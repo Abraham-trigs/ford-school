@@ -58,7 +58,7 @@ export default function SuperAdminDashboardPage() {
           {statCards.map((card) => (
             <div
               key={card.label}
-              className="bg-wine text-switch rounded-lg shadow p-4 flex flex-col justify-between hover:scale-105 transition-transform"
+              className="bg-wine text-back rounded-lg shadow p-4 flex flex-col justify-between hover:scale-105 transition-transform"
             >
               <span className="text-lg font-semibold">{card.label}</span>
               <span className="text-2xl font-bold mt-2">{card.value}</span>
@@ -68,8 +68,10 @@ export default function SuperAdminDashboardPage() {
 
         {/* Placeholder for future sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-wine text-switch rounded-lg p-6 shadow">
-            <h2 className="text-xl font-semibold mb-2">Quick Links</h2>
+          <div className="bg-wine text-back rounded-lg p-6 shadow">
+            <h2 className="text-xl font-semibold text-back mb-2">
+              Quick Links
+            </h2>
             <ul className="list-disc list-inside">
               <li>Manage Users</li>
               <li>View Payments</li>
@@ -78,8 +80,10 @@ export default function SuperAdminDashboardPage() {
             </ul>
           </div>
 
-          <div className="bg-wine text-switch rounded-lg p-6 shadow">
-            <h2 className="text-xl font-semibold mb-2">Recent Activity</h2>
+          <div className="bg-wine text-back rounded-lg p-6 shadow">
+            <h2 className="text-xl text-back font-semibold mb-2">
+              Recent Activity
+            </h2>
             <p>Placeholder for activity logs or notifications...</p>
           </div>
         </div>

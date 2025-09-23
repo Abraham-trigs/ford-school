@@ -1,9 +1,10 @@
 import { create } from "zustand";
+import type { Role } from "@/types/school"; // import your Role enum
 
 interface UserSession {
   id: string;
   email: string;
-  role: string;
+  role: Role;      // now strongly typed
   name?: string;
 }
 
@@ -16,13 +17,13 @@ interface SessionStore {
   user: UserSession | null;
   loggedIn: boolean;
   loading: boolean;
-  role: string | null;
+  role: Role | null;
 
   fetchSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 
-  setRole: (role: string) => void;
+  setRole: (role: Role) => void;
   clearRole: () => void;
 }
 
@@ -73,7 +74,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // fetch session again so state matches the JWT cookie
         await get().fetchSession();
       } else {
         throw new Error(data.message || "Login failed");
@@ -98,6 +98,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  setRole: (role: string) => set({ role }),
+  setRole: (role: Role) => set({ role }),
   clearRole: () => set({ role: null }),
 }));

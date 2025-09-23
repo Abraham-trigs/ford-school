@@ -59,7 +59,7 @@ export default function SuperAdminSideBar() {
         {
           label: "Staff",
           key: "staff",
-          href: "/users/staff",
+          href: "/superadmin/dashboard/users/staff",
           badge: badgeCounts.staff,
         },
         {

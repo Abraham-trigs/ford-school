@@ -1,149 +1,117 @@
-// src/app/api/users/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyJwtFromHeader } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import { authenticate, errorResponse, hashPassword, findUserById, Caller } from "@/lib/apiHelpers";
+import { Role  } from "@/types/school";
 
-/**
- * Users API – handles creation, reading, updating, and deleting users
- * Roles are strictly enforced based on SuperAdmin matrix
- */
-
-// ---------------- POST /api/users ----------------
-export async function POST(req: Request) {
-  try {
-    const authHeader = req.headers.get("authorization") ?? undefined;
-    const caller = await verifyJwtFromHeader(authHeader);
-    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const { name, email, password, phone, role, status } = await req.json();
-    if (!name || !email || !password || !role) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    // Role-based permission check
-    switch (caller.role) {
-      case "SUPERADMIN":
-        break; // can create any role
-      case "ADMIN":
-        if (["SUPERADMIN"].includes(role)) return NextResponse.json({ error: "Admins cannot create SuperAdmins" }, { status: 403 });
-        break;
-      case "SECRETARY":
-        if (!["STUDENT", "PARENT"].includes(role)) return NextResponse.json({ error: "Secretaries can only create students or parents" }, { status: 403 });
-        break;
-      default:
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        phone,
-        role,
-        password: hashedPassword,
-        status: status ?? "ACTIVE", // default ACTIVE if not provided
-      },
-      select: { id: true, name: true, email: true, phone: true, role: true, status: true, createdAt: true },
-    });
-
-    return NextResponse.json(newUser, { status: 201 });
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
-  }
-}
-
-// ---------------- GET /api/users/[id] ----------------
+// ---------------- GET /api/users/:id ----------------
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    const authHeader = req.headers.get("authorization") ?? undefined;
-    const caller = await verifyJwtFromHeader(authHeader);
-    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const caller: Caller | null = await authenticate(req);
+    if (!caller) return errorResponse("Unauthorized", 401);
 
     const { id } = params;
+    const user = await findUserById(id);
+    if (!user) return errorResponse("User not found", 404);
 
-    // Role-based fetch permissions
+    // Role-specific access
     switch (caller.role) {
-      case "SUPERADMIN":
-      case "ADMIN":
-      case "SECRETARY":
-      case "ACCOUNTANT":
-      case "LIBRARIAN":
-        break; // can fetch any user
-      case "STUDENT":
-        if (caller.userId !== id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      case Role.STUDENT:
+        if (caller.id !== id) return errorResponse("Forbidden");
         break;
+      case Role.PARENT:
+        const children = await prisma.student.findMany({
+          where: { parents: { some: { id: caller.id } } },
+          select: { userId: true },
+        });
+        if (!children.some((c) => c.userId === id)) return errorResponse("Forbidden");
+        break;
+      case Role.TEACHER:
+        const teacherStudents = await prisma.student.findMany({
+          where: { section: { teacherId: caller.id } },
+          select: { userId: true },
+        });
+        if (!teacherStudents.some((s) => s.userId === id)) return errorResponse("Forbidden");
+        break;
+      case Role.COUNSELOR:
+      case Role.NURSE:
+        // TODO: assigned students logic
+        return errorResponse("Forbidden");
+      case Role.SECRETARY:
+      case Role.ACCOUNTANT:
+      case Role.LIBRARIAN:
+      case Role.ADMIN:
+      case Role.SUPERADMIN:
+        break; // allowed
       default:
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return errorResponse("Forbidden");
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, name: true, email: true, phone: true, role: true, status: true, createdAt: true },
-    });
-
-    if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(user);
   } catch (err: any) {
-    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+    console.error(err);
+    return errorResponse("Server error: " + err.message, 500);
   }
 }
 
-// ---------------- PUT /api/users/[id] ----------------
+// ---------------- PUT /api/users/:id ----------------
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
-    const authHeader = req.headers.get("authorization") ?? undefined;
-    const caller = await verifyJwtFromHeader(authHeader);
-    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const caller: Caller | null = await authenticate(req);
+    if (!caller) return errorResponse("Unauthorized", 401);
 
     const { id } = params;
     const body = await req.json();
+    const targetUser = await findUserById(id);
+    if (!targetUser) return errorResponse("User not found", 404);
 
-    // Only allow status updates if caller has permission
-    if (body.status && !["SUPERADMIN", "ADMIN"].includes(caller.role)) {
-      return NextResponse.json({ error: "Only SuperAdmin/Admin can update user status" }, { status: 403 });
+    // Role-based update
+    switch (caller.role) {
+      case Role.SUPERADMIN:
+        break; // full access
+      case Role.ADMIN:
+        if (targetUser.role === Role.SUPERADMIN) return errorResponse("Cannot update a SuperAdmin");
+        break;
+      case Role.STUDENT:
+        if (caller.id !== id) return errorResponse("Forbidden");
+        delete body.status; // cannot change status
+        break;
+      case Role.SECRETARY:
+      case Role.ACCOUNTANT:
+      case Role.LIBRARIAN:
+      case Role.TEACHER:
+      case Role.PARENT:
+        return errorResponse("Forbidden");
+      default:
+        return errorResponse("Forbidden");
     }
 
-    // Admin cannot set SUSPENDED status, only SuperAdmin can
-    if (body.status === "SUSPENDED" && caller.role !== "SUPERADMIN") {
-      return NextResponse.json({ error: "Only SuperAdmin can suspend a user" }, { status: 403 });
-    }
-
-    // STUDENT can update self (excluding status)
-    if (caller.role === "STUDENT" && caller.userId === id) {
-      delete body.status;
-    }
+    if (body.password) body.password = await hashPassword(body.password);
 
     const updated = await prisma.user.update({ where: { id }, data: body });
     return NextResponse.json(updated);
   } catch (err: any) {
-    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+    console.error(err);
+    return errorResponse("Server error: " + err.message, 500);
   }
 }
 
-// ---------------- DELETE /api/users/[id] ----------------
+// ---------------- DELETE /api/users/:id ----------------
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    const authHeader = req.headers.get("authorization") ?? undefined;
-    const caller = await verifyJwtFromHeader(authHeader);
-    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    if (!["SUPERADMIN", "ADMIN"].includes(caller.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const caller: Caller | null = await authenticate(req);
+    if (!caller) return errorResponse("Unauthorized", 401);
+    if (![Role.SUPERADMIN, Role.ADMIN].includes(caller.role)) return errorResponse("Forbidden");
 
     const { id } = params;
-
-    const targetUser = await prisma.user.findUnique({ where: { id } });
-    if (!targetUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
-    if (targetUser.role === "SUPERADMIN" && caller.role !== "SUPERADMIN") {
-      return NextResponse.json({ error: "Cannot delete a SuperAdmin" }, { status: 403 });
-    }
+    const targetUser = await findUserById(id);
+    if (!targetUser) return errorResponse("User not found", 404);
+    if (targetUser.role === Role.SUPERADMIN && caller.role !== Role.SUPERADMIN)
+      return errorResponse("Cannot delete a SuperAdmin");
 
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: "Server error", details: err.message }, { status: 500 });
+    console.error(err);
+    return errorResponse("Server error: " + err.message, 500);
   }
 }

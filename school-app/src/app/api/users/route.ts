@@ -1,71 +1,45 @@
-// src/app/api/users/route.ts
-import { NextResponse } from "next/server";
+// File: /app/api/users/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import {
+  authenticate,
+  errorResponse,
+  hashPassword,
+  Caller,
+  getUsersForCaller,
+} from "@/lib/apiHelpers";
 import { prisma } from "@/lib/prisma";
-import { verifyJwtFromHeader } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import { Role, UserStatus } from "@prisma/client"; // ✅ Correct import from Prisma
 
-/**
- * POST /api/users
- * - SuperAdmin: can create any user
- * - Admin: can create staff/students/parents (⚠️ later restrict by department)
- * - Secretary: can create students + parents only
- * - Accountant/Librarian: ❌ cannot create
- * - Teacher/Counselor/Nurse/Student/Parent: ❌ cannot create
- * - Service roles (Cleaner, Janitor, Cook, KitchenAssistant): ❌ no access
- */
-export async function POST(req: Request) {
+// ---------------- POST /api/users ----------------
+export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization") ?? undefined;
-    const caller = await verifyJwtFromHeader(authHeader);
-    if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const caller: Caller | null = await authenticate(req);
+    if (!caller) return errorResponse("Unauthorized", 401);
 
-    const body = await req.json();
-    const { name, email, password, phone, role } = body;
-
+    const { name, email, password, phone, role, status } = await req.json();
     if (!name || !email || !password || !role) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return errorResponse("Missing required fields", 400);
     }
 
-    // role-based permission check
+    // Role-based creation rules
     switch (caller.role) {
-      case "SUPERADMIN":
-        // ✅ can create any role
-        break;
-
-      case "ADMIN":
-        // ✅ can create staff/students/parents
-        if (["SUPERADMIN"].includes(role)) {
-          return NextResponse.json({ error: "Admins cannot create SuperAdmins" }, { status: 403 });
+      case Role.SUPERADMIN:
+        break; // can create anyone
+      case Role.ADMIN:
+        if (role === Role.SUPERADMIN) {
+          return errorResponse("Admins cannot create SuperAdmins", 403);
         }
         break;
-
-      case "SECRETARY":
-        // ✅ can create students + parents only
-        if (!["STUDENT", "PARENT"].includes(role)) {
-          return NextResponse.json({ error: "Secretaries can only create students or parents" }, { status: 403 });
+      case Role.SECRETARY:
+        if (![Role.STUDENT, Role.PARENT].includes(role as Role)) {
+          return errorResponse("Secretaries can only create students or parents", 403);
         }
         break;
-
-      // ❌ no creation access
-      case "ACCOUNTANT":
-      case "LIBRARIAN":
-      case "TEACHER":
-      case "COUNSELOR":
-      case "NURSE":
-      case "STUDENT":
-      case "PARENT":
-      case "CLEANER":
-      case "JANITOR":
-      case "COOK":
-      case "KITCHEN_ASSISTANT":
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
       default:
-        return NextResponse.json({ error: "Role not recognized" }, { status: 400 });
+        return errorResponse("Forbidden", 403);
     }
 
-    // hash password before saving
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashed = await hashPassword(password);
 
     const newUser = await prisma.user.create({
       data: {
@@ -73,8 +47,8 @@ export async function POST(req: Request) {
         email,
         phone,
         role,
-        password: hashedPassword,
-        status: "ACTIVE",
+        password: hashed,
+        status: status ?? UserStatus.ACTIVE, // ✅ No casting needed
       },
       select: {
         id: true,
@@ -89,10 +63,58 @@ export async function POST(req: Request) {
 
     return NextResponse.json(newUser, { status: 201 });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json(
-      { error: "Server error", details: err.message },
-      { status: 500 }
-    );
+    console.error("POST /api/users error:", err);
+    return errorResponse("Server error: " + err.message, 500);
+  }
+}
+
+// ---------------- GET /api/users ----------------
+export async function GET(req: NextRequest) {
+  try {
+    const caller: Caller | null = await authenticate(req);
+    if (!caller) return errorResponse("Unauthorized", 401);
+
+    const url = new URL(req.url);
+    const page = parseInt(url.searchParams.get("page") || "1");
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    const search = url.searchParams.get("search") || "";
+    const roleFilter = url.searchParams.get("roles")?.split(",") || undefined;
+    const idFilter = url.searchParams.get("ids")?.split(",") || undefined;
+
+    // Base dataset respecting caller's role
+    let users = await getUsersForCaller(caller);
+
+    // Apply filters
+    if (roleFilter?.length) {
+      users = users.filter((u) => roleFilter.includes(u.role));
+    }
+    if (idFilter?.length) {
+      users = users.filter((u) => idFilter.includes(u.id));
+    }
+    if (search) {
+      const s = search.toLowerCase();
+      users = users.filter(
+        (u) =>
+          u.name?.toLowerCase().includes(s) ||
+          u.email?.toLowerCase().includes(s) ||
+          u.phone?.toLowerCase().includes(s),
+      );
+    }
+
+    // Pagination
+    const total = users.length;
+    const start = (page - 1) * limit;
+    const paginated = users.slice(start, start + limit);
+
+    return NextResponse.json({
+      users: paginated,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (err: any) {
+    console.error("GET /api/users error:", err);
+    return errorResponse("Server error: " + err.message, 500);
   }
 }
