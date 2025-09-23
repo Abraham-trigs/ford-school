@@ -1,18 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { HiMenu, HiX } from "react-icons/hi";
-import SuperAdminSideBar from "./SuperAdminSideBar";
+import RoleSidebar from "./RoleSidebar";
 import { useSessionStore } from "@/lib/store/sessionStore";
+import { useUsersStore } from "@/lib/store/UserStore";
 
-export default function SuperAdminNavBar() {
+export default function RoleNavbar() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const toggleSidebar = () => setMobileSidebarOpen((prev) => !prev);
 
-  const { user } = useSessionStore(); // get current logged-in user
-  const role = user?.role ?? "superadmin"; // fallback if undefined
+  const { user } = useSessionStore(); // currently logged-in user
+  const role = user?.role ?? ""; // dynamic role
   const roleLower = role.toLowerCase();
+
+  const { fetchUsersIfAllowed } = useUsersStore();
+
+  // Fetch users on mount to populate badge counts
+  useEffect(() => {
+    fetchUsersIfAllowed();
+  }, [fetchUsersIfAllowed]);
 
   return (
     <>
@@ -26,6 +34,7 @@ export default function SuperAdminNavBar() {
           </Link>
 
           <div className="flex items-center gap-4">
+            {/* Mobile Hamburger */}
             <button
               className="md:hidden p-2 rounded hover:bg-light"
               onClick={toggleSidebar}
@@ -33,23 +42,28 @@ export default function SuperAdminNavBar() {
               {mobileSidebarOpen ? <HiX size={24} /> : <HiMenu size={24} />}
             </button>
 
+            {/* Desktop User Info */}
             <div className="hidden md:flex items-center gap-6">
               <button className="relative p-2 hover:text-light">🔔</button>
               <button className="relative p-2 hover:text-light">💬</button>
               <div className="p-2 rounded bg-light text-wine font-semibold">
-                {role}
+                {user?.name ?? "User"} ({role})
               </div>
             </div>
           </div>
         </div>
       </nav>
 
-      <SuperAdminSideBar
-        role={role}
-        mobileOpen={mobileSidebarOpen}
-        setMobileOpen={setMobileSidebarOpen}
-      />
+      {/* Sidebar */}
+      {role && (
+        <RoleSidebar
+          role={role}
+          mobileOpen={mobileSidebarOpen}
+          setMobileOpen={setMobileSidebarOpen}
+        />
+      )}
 
+      {/* Mobile overlay */}
       {mobileSidebarOpen && (
         <div
           className="fixed inset-0 bg-black opacity-30 z-40 mt-16 md:hidden"

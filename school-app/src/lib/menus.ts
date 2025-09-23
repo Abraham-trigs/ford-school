@@ -19,7 +19,7 @@ export const menusByRole: RoleMenus = {
       label: "Dashboard",
       key: "dashboard",
       href: "/superadmin/dashboard",
-      badgeKey: "users", // example badge key
+      badgeKey: "users", // total users
     },
     {
       label: "Users",
@@ -27,7 +27,7 @@ export const menusByRole: RoleMenus = {
       children: [
         { label: "Staff", key: "staff", href: "/superadmin/dashboard/users/staff", badgeKey: "staff" },
         { label: "Students", key: "students", href: "/superadmin/dashboard/users/students", badgeKey: "students" },
-        { label: "Parents", key: "parents", href: "/superadmin/dashboard/users/parents" },
+        { label: "Parents", key: "parents", href: "/superadmin/dashboard/users/parents", badgeKey: "parents" },
         { label: "Roles & Permissions", key: "roles", href: "/superadmin/dashboard/users/roles" },
       ],
     },
@@ -50,71 +50,23 @@ export const menusByRole: RoleMenus = {
   ],
 
   teacher: [
-    {
-      label: "Dashboard",
-      key: "dashboard",
-      href: "/teacher/dashboard",
-    },
-    {
-      label: "My Classes",
-      key: "classes",
-      href: "/teacher/dashboard/classes",
-    },
-    {
-      label: "Attendance",
-      key: "attendance",
-      href: "/teacher/dashboard/attendance",
-    },
-    {
-      label: "Exams & Grades",
-      key: "exams",
-      href: "/teacher/dashboard/exams",
-    },
+    { label: "Dashboard", key: "dashboard", href: "/teacher/dashboard" },
+    { label: "My Classes", key: "classes", href: "/teacher/dashboard/classes" },
+    { label: "Attendance", key: "attendance", href: "/teacher/dashboard/attendance" },
+    { label: "Exams & Grades", key: "exams", href: "/teacher/dashboard/exams" },
   ],
 
   student: [
-    {
-      label: "Dashboard",
-      key: "dashboard",
-      href: "/student/dashboard",
-    },
-    {
-      label: "My Courses",
-      key: "courses",
-      href: "/student/dashboard/courses",
-    },
-    {
-      label: "Attendance",
-      key: "attendance",
-      href: "/student/dashboard/attendance",
-    },
-    {
-      label: "Grades",
-      key: "grades",
-      href: "/student/dashboard/grades",
-    },
+    { label: "Dashboard", key: "dashboard", href: "/student/dashboard" },
+    { label: "My Courses", key: "courses", href: "/student/dashboard/courses" },
+    { label: "Attendance", key: "attendance", href: "/student/dashboard/attendance" },
+    { label: "Grades", key: "grades", href: "/student/dashboard/grades" },
   ],
 
   parent: [
-    {
-      label: "Dashboard",
-      key: "dashboard",
-      href: "/parent/dashboard",
-    },
-    {
-      label: "My Children",
-      key: "children",
-      href: "/parent/dashboard/children",
-    },
-    {
-      label: "Attendance",
-      key: "attendance",
-      href: "/parent/dashboard/attendance",
-    },
-    {
-      label: "Payments",
-      key: "payments",
-      href: "/parent/dashboard/payments",
-    },
+    { label: "Dashboard", key: "dashboard", href: "/parent/dashboard" },
+    { label: "My Children", key: "children", href: "/parent/dashboard/children", badgeKey: "children" },
+    { label: "Attendance", key: "attendance", href: "/parent/dashboard/attendance" },
+    { label: "Payments", key: "payments", href: "/parent/dashboard/payments", badgeKey: "paymentsPending" },
   ],
 };

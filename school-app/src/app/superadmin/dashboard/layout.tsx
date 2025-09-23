@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/lib/store/sessionStore";
-import SuperAdminNavBar from "@/components/superadmin/SuperAdminNavBar";
+import SuperAdminNavBar from "@/components/layout/RoleNavbar";
 
 export default function SuperAdminLayout({
   children,

@@ -9,6 +9,7 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
 import { useSidebarStore } from "@/lib/store/SidebarStore";
+import { useUsersStore } from "@/lib/store/UserStore"; // ✅ import UsersStore
 import { getMenuForRole } from "@/lib/menus";
 
 interface SidebarProps {
@@ -25,13 +26,22 @@ export default function RoleSidebar({
   const pathname = usePathname();
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const { collapsedSections, search, toggleSection, setSearch, badgeCounts } =
+  const { collapsedSections, search, toggleSection, setSearch } =
     useSidebarStore();
 
   const roleCollapsedSections = collapsedSections[role] || {};
   const roleSearch = search[role] || "";
 
   const menu = getMenuForRole(role);
+
+  // --- derive badge counts from UsersStore ---
+  const { staff, students, parents, totalUsers } = useUsersStore();
+  const badgeCounts: Record<string, number> = {
+    staff: staff.length,
+    students: students.length,
+    parents: parents.length,
+    users: totalUsers,
+  };
 
   useEffect(() => {
     if (!mobileOpen) return;
