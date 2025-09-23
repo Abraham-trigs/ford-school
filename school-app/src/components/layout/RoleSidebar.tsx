@@ -9,7 +9,8 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
 import { useSidebarStore } from "@/lib/store/SidebarStore";
-import { useUsersStore } from "@/lib/store/UserStore"; // ✅ import UsersStore
+import { useUsersStore } from "@/lib/store/UserStore";
+import { useSessionStore } from "@/lib/store/sessionStore"; // added user store
 import { getMenuForRole } from "@/lib/menus";
 
 interface SidebarProps {
@@ -42,6 +43,10 @@ export default function RoleSidebar({
     parents: parents.length,
     users: totalUsers,
   };
+
+  // --- get first name from session ---
+  const { user } = useSessionStore();
+  const firstName = user?.name?.split(" ")[0] ?? "User";
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -93,10 +98,12 @@ export default function RoleSidebar({
           md:translate-x-0 md:top-16 md:h-[calc(100%-4rem)]
         `}
       >
+        {/* Top user greeting */}
         <div className="p-4 text-xl font-display border-b border-light hidden md:block">
-          {role} Dashboard
+          {firstName}'s Dashboard
         </div>
 
+        {/* Search input */}
         <div className="p-4 border-b border-light flex items-center gap-2">
           <MagnifyingGlassIcon className="w-5 h-5 text-switch" />
           <input
@@ -108,6 +115,7 @@ export default function RoleSidebar({
           />
         </div>
 
+        {/* Menu items */}
         <nav className="flex-1 overflow-y-auto mt-2">
           {filteredMenu.map((item) => (
             <div key={item.key} className="mb-1">
@@ -165,6 +173,7 @@ export default function RoleSidebar({
         </nav>
       </aside>
 
+      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black opacity-30 z-40 mt-16 md:hidden"
