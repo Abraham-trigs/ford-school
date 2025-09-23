@@ -1,4 +1,3 @@
-// app/admin/staff/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -21,7 +20,6 @@ const allRoles = [
   "PARENT",
 ] as const;
 
-// For SuperAdmin staff management page, allow all roles except STUDENT and PARENT
 const staffRoles = allRoles.filter((r) => !["STUDENT", "PARENT"].includes(r));
 
 export default function StaffPage() {
@@ -33,16 +31,22 @@ export default function StaffPage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: "", // ✅ Added password to form state
+    password: "",
     phone: "",
     role: "TEACHER",
   });
+
+  const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
 
   useEffect(() => {
     fetchUsersIfAllowed();
   }, [fetchUsersIfAllowed]);
 
-  // ---------------- In your component ----------------
+  const filteredStaff =
+    selectedFilter === "ALL"
+      ? staff
+      : staff.filter((s) => s.role === selectedFilter);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -50,10 +54,9 @@ export default function StaffPage() {
       return alert("Name, email and password are required");
     }
 
-    // Ensure the role is valid
     const roleValue = staffRoles.includes(form.role as any)
-      ? (form.role as Role)
-      : Role.TEACHER;
+      ? (form.role as any)
+      : "TEACHER";
 
     try {
       await addUser({
@@ -61,10 +64,9 @@ export default function StaffPage() {
         email: form.email,
         password: form.password,
         phone: form.phone,
-        role: roleValue, // ✅ now type-safe
+        role: roleValue,
       });
 
-      // Reset form
       setForm({
         name: "",
         email: "",
@@ -124,7 +126,7 @@ export default function StaffPage() {
           <select
             value={form.role}
             onChange={(e) => {
-              const value = e.target.value as Role;
+              const value = e.target.value as any;
               if (staffRoles.includes(value)) setForm({ ...form, role: value });
             }}
             className="p-2 rounded bg-gray-900 border border-gray-600 text-gray-100"
@@ -144,12 +146,40 @@ export default function StaffPage() {
         </button>
       </form>
 
+      {/* ---------------- Filter Buttons (NOW BELOW FORM) ---------------- */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          className={`px-3 py-1 rounded ${
+            selectedFilter === "ALL"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-700 text-gray-300"
+          }`}
+          onClick={() => setSelectedFilter("ALL")}
+        >
+          All
+        </button>
+
+        {staffRoles.map((role) => (
+          <button
+            key={role}
+            className={`px-3 py-1 rounded ${
+              selectedFilter === role
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 text-gray-300"
+            }`}
+            onClick={() => setSelectedFilter(role)}
+          >
+            {role.replace("_", " ")}
+          </button>
+        ))}
+      </div>
+
       {/* ---------------- STAFF LIST ---------------- */}
-      {staff.length === 0 ? (
+      {filteredStaff.length === 0 ? (
         <p className="text-gray-500">No staff found.</p>
       ) : (
         <ul className="space-y-3">
-          {staff.map((s) => (
+          {filteredStaff.map((s) => (
             <li
               key={s.id}
               className="p-4 rounded-lg border border-gray-700 bg-gray-800"

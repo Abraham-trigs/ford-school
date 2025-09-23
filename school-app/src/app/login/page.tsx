@@ -16,53 +16,56 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔥 Redirect if already logged in
+  // Redirect if already logged in
   useEffect(() => {
-    if (loggedIn && user) {
+    if (!loading && loggedIn && user) {
       redirectByRole(user.role);
     }
-  }, [loggedIn, user]);
+  }, [loggedIn, loading, user]);
 
   const redirectByRole = (role: string) => {
-    switch (role) {
-      case "SUPERADMIN":
-        router.replace("/superadmin/dashboard");
-        break;
-      case "ADMIN":
-        router.replace("/admin/dashboard");
-        break;
-      case "TEACHER":
-        router.replace("/teacher/dashboard");
-        break;
-      case "SECRETARY":
-        router.replace("/secretary/dashboard");
-        break;
-      case "ACCOUNTANT":
-        router.replace("/accountant/dashboard");
-        break;
-      case "LIBRARIAN":
-        router.replace("/librarian/dashboard");
-        break;
-      case "COUNSELOR":
-        router.replace("/counselor/dashboard");
-        break;
-      case "NURSE":
-        router.replace("/nurse/dashboard");
-        break;
-      case "CLEANER":
-      case "JANITOR":
-      case "COOK":
-      case "KITCHEN_ASSISTANT":
-        router.replace("/staff/dashboard");
-        break;
-      case "STUDENT":
-        router.replace("/student/dashboard");
-        break;
-      case "PARENT":
-        router.replace("/parent/dashboard");
-        break;
-      default:
-        router.replace("/");
+    // Only redirect if user is on the login page
+    if (window.location.pathname === "/login") {
+      switch (role) {
+        case "SUPERADMIN":
+          router.replace("/superadmin/dashboard");
+          break;
+        case "ADMIN":
+          router.replace("/admin/dashboard");
+          break;
+        case "TEACHER":
+          router.replace("/teacher/dashboard");
+          break;
+        case "SECRETARY":
+          router.replace("/secretary/dashboard");
+          break;
+        case "ACCOUNTANT":
+          router.replace("/accountant/dashboard");
+          break;
+        case "LIBRARIAN":
+          router.replace("/librarian/dashboard");
+          break;
+        case "COUNSELOR":
+          router.replace("/counselor/dashboard");
+          break;
+        case "NURSE":
+          router.replace("/nurse/dashboard");
+          break;
+        case "CLEANER":
+        case "JANITOR":
+        case "COOK":
+        case "KITCHEN_ASSISTANT":
+          router.replace("/staff/dashboard");
+          break;
+        case "STUDENT":
+          router.replace("/student/dashboard");
+          break;
+        case "PARENT":
+          router.replace("/parent/dashboard");
+          break;
+        default:
+          router.replace("/");
+      }
     }
   };
 
@@ -81,7 +84,6 @@ export default function LoginPage() {
     }
   };
 
-  // ✅ Framer Motion variants
   const containerVariants: Variants = {
     hidden: {},
     visible: { transition: { staggerChildren: 0.15 } },

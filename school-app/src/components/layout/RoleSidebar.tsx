@@ -8,7 +8,8 @@ import {
   ChevronUpIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
-import { useSidebarStore } from "@/lib/store/SideBarStore";
+import { useSidebarStore } from "@/lib/store/SidebarStore";
+import { getMenuForRole } from "@/lib/menus";
 
 interface SidebarProps {
   role: string;
@@ -16,14 +17,7 @@ interface SidebarProps {
   setMobileOpen: (open: boolean) => void;
 }
 
-type BadgeCounts = {
-  users?: number;
-  students?: number;
-  staff?: number;
-  paymentsPending?: number;
-};
-
-export default function SuperAdminSideBar({
+export default function RoleSidebar({
   role,
   mobileOpen,
   setMobileOpen,
@@ -31,22 +25,14 @@ export default function SuperAdminSideBar({
   const pathname = usePathname();
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const { collapsedSections, search, toggleSection, setSearch } =
+  const { collapsedSections, search, toggleSection, setSearch, badgeCounts } =
     useSidebarStore();
 
-  // Use role-specific state
   const roleCollapsedSections = collapsedSections[role] || {};
   const roleSearch = search[role] || "";
 
-  // Placeholder badge counts
-  const badgeCounts: BadgeCounts = {
-    users: 150,
-    students: 120,
-    staff: 30,
-    paymentsPending: 5,
-  };
+  const menu = getMenuForRole(role);
 
-  // Close sidebar on outside click (mobile)
   useEffect(() => {
     if (!mobileOpen) return;
 
@@ -63,100 +49,6 @@ export default function SuperAdminSideBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [mobileOpen, setMobileOpen]);
 
-  const menu = [
-    {
-      label: "Dashboard",
-      key: "dashboard",
-      href: `/${role.toLowerCase()}/dashboard`,
-      badge: badgeCounts.users,
-    },
-    {
-      label: "Users",
-      key: "users",
-      children: [
-        {
-          label: "Staff",
-          key: "staff",
-          href: `/${role.toLowerCase()}/dashboard/users/staff`,
-          badge: badgeCounts.staff,
-        },
-        {
-          label: "Students",
-          key: "students",
-          href: `/${role.toLowerCase()}/dashboard/users/students`,
-          badge: badgeCounts.students,
-        },
-        {
-          label: "Parents",
-          key: "parents",
-          href: `/${role.toLowerCase()}/dashboard/users/parents`,
-        },
-        {
-          label: "Roles & Permissions",
-          key: "roles",
-          href: `/${role.toLowerCase()}/dashboard/users/roles`,
-        },
-      ],
-    },
-    {
-      label: "Finance",
-      key: "finance",
-      children: [
-        {
-          label: "Payments",
-          key: "payments",
-          href: `/${role.toLowerCase()}/dashboard/finance/payments`,
-          badge: badgeCounts.paymentsPending,
-        },
-        {
-          label: "Invoices",
-          key: "invoices",
-          href: `/${role.toLowerCase()}/dashboard/finance/invoices`,
-        },
-        {
-          label: "Income/Expense",
-          key: "incomeExpense",
-          href: `/${role.toLowerCase()}/dashboard/finance/income-expense`,
-        },
-      ],
-    },
-    {
-      label: "Attendance",
-      key: "attendance",
-      href: `/${role.toLowerCase()}/dashboard/attendance`,
-    },
-    {
-      label: "Academic",
-      key: "academic",
-      href: `/${role.toLowerCase()}/dashboard/academic`,
-    },
-    {
-      label: "Assets",
-      key: "assets",
-      href: `/${role.toLowerCase()}/dashboard/assets`,
-    },
-    {
-      label: "Library",
-      key: "library",
-      href: `/${role.toLowerCase()}/dashboard/library`,
-    },
-    {
-      label: "Transport",
-      key: "transport",
-      href: `/${role.toLowerCase()}/dashboard/transport`,
-    },
-    {
-      label: "Events & Announcements",
-      key: "events",
-      href: `/${role.toLowerCase()}/dashboard/events`,
-    },
-    {
-      label: "Visitors",
-      key: "visitors",
-      href: `/${role.toLowerCase()}/dashboard/visitors`,
-    },
-  ];
-
   const filteredMenu = menu.map((item) => {
     if (item.children) {
       const children = item.children.filter((child) =>
@@ -168,6 +60,17 @@ export default function SuperAdminSideBar({
   });
 
   const getActiveKey = (href: string) => pathname?.startsWith(href);
+
+  const renderBadge = (badgeKey?: string) => {
+    if (!badgeKey) return null;
+    const count = badgeCounts[badgeKey];
+    if (!count) return null;
+    return (
+      <span className="bg-light text-wine px-2 py-0.5 rounded-full text-xs font-semibold">
+        {count}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -212,21 +115,23 @@ export default function SuperAdminSideBar({
                     )}
                   </button>
                   <div
-                    className={`overflow-hidden transition-max-h duration-300 ${roleCollapsedSections[item.key] ? "max-h-40" : "max-h-0"}`}
+                    className={`overflow-hidden transition-max-h duration-300 ${
+                      roleCollapsedSections[item.key] ? "max-h-40" : "max-h-0"
+                    }`}
                   >
                     {item.children.map((child) => (
                       <Link
                         key={child.key}
                         href={child.href}
-                        className={`flex justify-between items-center px-8 py-2 rounded hover:bg-light hover:text-wine ${getActiveKey(child.href) ? "bg-light text-wine font-bold" : "text-switch"}`}
+                        className={`flex justify-between items-center px-8 py-2 rounded hover:bg-light hover:text-wine ${
+                          getActiveKey(child.href)
+                            ? "bg-light text-wine font-bold"
+                            : "text-switch"
+                        }`}
                         onClick={() => setMobileOpen(false)}
                       >
                         <span>{child.label}</span>
-                        {child.badge && (
-                          <span className="bg-light text-wine px-2 py-0.5 rounded-full text-xs font-semibold">
-                            {child.badge}
-                          </span>
-                        )}
+                        {renderBadge(child.badgeKey)}
                       </Link>
                     ))}
                   </div>
@@ -234,15 +139,15 @@ export default function SuperAdminSideBar({
               ) : (
                 <Link
                   href={item.href}
-                  className={`flex justify-between items-center px-4 py-2 rounded hover:bg-light hover:text-wine ${getActiveKey(item.href) ? "bg-light text-wine font-bold" : "text-switch"}`}
+                  className={`flex justify-between items-center px-4 py-2 rounded hover:bg-light hover:text-wine ${
+                    getActiveKey(item.href)
+                      ? "bg-light text-wine font-bold"
+                      : "text-switch"
+                  }`}
                   onClick={() => setMobileOpen(false)}
                 >
                   <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="bg-light text-wine px-2 py-0.5 rounded-full text-xs font-semibold">
-                      {item.badge}
-                    </span>
-                  )}
+                  {renderBadge(item.badgeKey)}
                 </Link>
               )}
             </div>
