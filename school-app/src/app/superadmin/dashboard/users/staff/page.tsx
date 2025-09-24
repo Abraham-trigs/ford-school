@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useUsersStore } from "@/lib/store/UserStore";
-
+import DetailButton from "@/components/DetailButton";
 const allRoles = [
   "SUPERADMIN",
   "ADMIN",
@@ -178,19 +178,26 @@ export default function StaffPage() {
       {filteredStaff.length === 0 ? (
         <p className="text-gray-500">No staff found.</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredStaff.map((s) => (
             <li
               key={s.id}
-              className="p-4 rounded-lg border border-gray-700 bg-gray-800"
+              className="p-4 rounded-lg border border-gray-700 bg-gray-800 flex flex-col justify-between"
             >
-              <p className="font-semibold">{s.name}</p>
-              <p className="text-sm text-gray-400">{s.email}</p>
-              {s.phone && <p className="text-sm text-gray-500">{s.phone}</p>}
-              <p className="text-xs text-gray-500">
-                Role: {s.role} • Joined:{" "}
-                {new Date(s.createdAt).toLocaleDateString()}
-              </p>
+              <div className="mb-4">
+                <p className="font-semibold">{s.name}</p>
+                <p className="text-sm text-gray-400">{s.email}</p>
+                {s.phone && <p className="text-sm text-gray-500">{s.phone}</p>}
+                <p className="text-xs text-gray-500">
+                  Role: {s.role} • Joined:{" "}
+                  {new Date(s.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+              <DetailButton
+                id={s.id}
+                name={s.name}
+                basePath="/superadmin/dashboard/users/staff"
+              />
             </li>
           ))}
         </ul>

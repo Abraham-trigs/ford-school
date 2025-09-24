@@ -46,7 +46,7 @@ export default function RoleSidebar({
 
   // --- get first name from session ---
   const { user } = useSessionStore();
-  const firstName = user?.name?.split(" ")[0] ?? "User";
+  const firstName = user?.name?.split(" ")[0]?.trim() ?? "User";
 
   useEffect(() => {
     if (!mobileOpen) return;

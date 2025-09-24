@@ -14,6 +14,7 @@ export default function RoleNavbar() {
   const { user } = useSessionStore(); // logged-in user
   const role = user?.role ?? "";
   const roleLower = role ? role.toLowerCase() : "";
+  const firstName = user?.name?.split(" ")[0]?.trim() ?? "User";
 
   const { fetchUsersIfAllowed } = useUsersStore();
 
@@ -21,7 +22,7 @@ export default function RoleNavbar() {
   useEffect(() => {
     fetchUsersIfAllowed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount
+  }, []);
 
   return (
     <>
@@ -48,7 +49,7 @@ export default function RoleNavbar() {
               <button className="relative p-2 hover:text-light">🔔</button>
               <button className="relative p-2 hover:text-light">💬</button>
               <div className="p-2 rounded bg-light text-wine font-semibold">
-                {user?.name ?? "User"} {role && `(${role})`}
+                {firstName} {role && `(${role})`}
               </div>
             </div>
           </div>

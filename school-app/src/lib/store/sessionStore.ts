@@ -1,14 +1,11 @@
 "use client";
 
 import { create } from "zustand";
-import type { Role } from "@/types/school";
+import type { Role, User } from "@/types/school";
 import { useUsersStore } from "@/lib/store/UserStore";
 
-export interface UserSession {
-  id: string;
-  email: string;
+export interface UserSession extends User {
   role: Role;
-  name?: string;
 }
 
 interface SessionResponse {
@@ -21,8 +18,8 @@ interface SessionStore {
   loggedIn: boolean;
   loading: boolean;
   role: Role | null;
-  firstName: string; // ✅ derived
-  isSuperAdmin: boolean; // ✅ derived
+  firstName: string;
+  isSuperAdmin: boolean;
 
   fetchSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -48,20 +45,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const data: SessionResponse = await res.json();
 
       if (data.loggedIn && data.user) {
-        const firstName = data.user.name?.split(" ")[0]?.trim() ?? "User";
-        set({
-          user: data.user,
-          loggedIn: true,
-          role: data.user.role,
-          firstName,
-          isSuperAdmin: data.user.role === "SUPERADMIN",
-        });
-
         const usersStore = useUsersStore.getState();
+
+        // Ensure UsersStore is populated
         if (!usersStore.hasFetchedUsers) {
           await usersStore.fetchUsersIfAllowed();
           usersStore.setHasFetchedUsers(true);
         }
+
+        // Pull full user info from UsersStore if available
+        const fullUser = usersStore.userMap[data.user.id] ?? data.user;
+        const firstName = fullUser.name?.split(" ")[0]?.trim() ?? "User";
+
+        set({
+          user: fullUser,
+          loggedIn: true,
+          role: fullUser.role,
+          firstName,
+          isSuperAdmin: fullUser.role === "SUPERADMIN",
+        });
       } else {
         set({
           user: null,
@@ -93,6 +95,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+
       const data = await res.json();
 
       if (res.ok && data.success) {
