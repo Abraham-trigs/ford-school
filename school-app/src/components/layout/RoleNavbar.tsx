@@ -1,46 +1,76 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { HiMenu, HiX } from "react-icons/hi";
 import RoleSidebar from "./RoleSidebar";
 import { useSessionStore } from "@/lib/store/sessionStore";
+import { useUsersStore } from "@/lib/store/UserStore";
 
 export default function RoleNavbar() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const toggleSidebar = () => setMobileSidebarOpen((prev) => !prev);
 
-  // ✅ grab derived fields directly from the store
-  const { role, firstName, loggedIn } = useSessionStore();
+  const { user } = useSessionStore(); // logged-in user
+  const role = user?.role ?? "";
+  const roleLower = role ? role.toLowerCase() : "";
+
+  const { fetchUsersIfAllowed } = useUsersStore();
+
+  // Fetch users on mount (safe, no loop)
+  useEffect(() => {
+    fetchUsersIfAllowed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
 
   return (
-    <nav className="bg-surface border-b border-border px-4 py-2 flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <button
-          className="md:hidden text-textPrimary"
-          onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-        >
-          {mobileSidebarOpen ? <HiX size={24} /> : <HiMenu size={24} />}
-        </button>
-        <Link href="/" className="text-lg font-semibold text-textPrimary">
-          School App
-        </Link>
-      </div>
+    <>
+      <nav className="bg-wine text-back border-b border-light sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+          <Link
+            href={roleLower ? `/${roleLower}/dashboard` : "/"}
+            className="text-xl font-bold text-back ml-2 md:ml-0"
+          >
+            FordSchools
+          </Link>
 
-      <div className="flex items-center gap-4">
-        {loggedIn && (
-          <span className="text-textSecondary">Hi, {firstName}</span>
-        )}
-      </div>
+          <div className="flex items-center gap-4">
+            {/* Mobile Hamburger */}
+            <button
+              className="md:hidden p-2 rounded hover:bg-light"
+              onClick={toggleSidebar}
+            >
+              {mobileSidebarOpen ? <HiX size={24} /> : <HiMenu size={24} />}
+            </button>
 
-      {/* ✅ mobile sidebar */}
-      {mobileSidebarOpen && (
-        <div className="absolute top-12 left-0 w-3/4 max-w-xs h-screen bg-surface shadow-lg md:hidden">
-          <RoleSidebar
-            onLinkClick={() => setMobileSidebarOpen(false)}
-            role={role ?? ""}
-          />
+            {/* Desktop User Info */}
+            <div className="hidden md:flex items-center gap-6">
+              <button className="relative p-2 hover:text-light">🔔</button>
+              <button className="relative p-2 hover:text-light">💬</button>
+              <div className="p-2 rounded bg-light text-wine font-semibold">
+                {user?.name ?? "User"} {role && `(${role})`}
+              </div>
+            </div>
+          </div>
         </div>
+      </nav>
+
+      {/* Sidebar */}
+      {role && (
+        <RoleSidebar
+          role={role}
+          mobileOpen={mobileSidebarOpen}
+          setMobileOpen={setMobileSidebarOpen}
+        />
       )}
-    </nav>
+
+      {/* Mobile overlay */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black opacity-30 z-40 mt-16 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+    </>
   );
 }

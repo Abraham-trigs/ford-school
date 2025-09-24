@@ -1,64 +1,185 @@
 "use client";
 
 import Link from "next/link";
-import { useSidebarStore } from "@/lib/store/sidebarStore";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useRef } from "react";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/react/24/solid";
+import { useSidebarStore } from "@/lib/store/SidebarStore";
+import { useUsersStore } from "@/lib/store/UserStore";
 import { useSessionStore } from "@/lib/store/sessionStore";
+import { getMenuForRole } from "@/lib/menus";
 
-interface RoleSidebarProps {
-  onLinkClick?: () => void;
+interface SidebarProps {
   role: string;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
 }
 
-export default function RoleSidebar({ onLinkClick, role }: RoleSidebarProps) {
-  // ✅ get helpers from sidebar store
-  const {
-    toggleSection,
-    setSearch,
-    getCollapsedSectionsForRole,
-    getSearchForRole,
-  } = useSidebarStore();
+export default function RoleSidebar({
+  role,
+  mobileOpen,
+  setMobileOpen,
+}: SidebarProps) {
+  const pathname = usePathname();
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // ✅ stable derived values
-  const collapsedSections = getCollapsedSectionsForRole(role);
-  const searchValue = getSearchForRole(role);
-  const { isSuperAdmin } = useSessionStore();
+  const { collapsedSections, search, toggleSection, setSearch } =
+    useSidebarStore();
+
+  const roleCollapsedSections = collapsedSections[role] || {};
+  const roleSearch = search[role] || "";
+
+  const menu = getMenuForRole(role);
+
+  // --- derive badge counts from UsersStore ---
+  const { staff, students, parents, totalUsers } = useUsersStore();
+  const badgeCounts: Record<string, number> = {
+    staff: staff.length,
+    students: students.length,
+    parents: parents.length,
+    users: totalUsers,
+  };
+
+  // --- get first name from session ---
+  const { user } = useSessionStore();
+  const firstName = user?.name?.split(" ")[0] ?? "User";
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target as Node)
+      ) {
+        setMobileOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [mobileOpen, setMobileOpen]);
+
+  // --- memoize filtered menu to prevent re-renders ---
+  const filteredMenu = useMemo(() => {
+    return menu.map((item) => {
+      if (item.children) {
+        const children = item.children.filter((child) =>
+          child.label.toLowerCase().includes(roleSearch.toLowerCase())
+        );
+        return { ...item, children };
+      }
+      return item;
+    });
+  }, [menu, roleSearch]);
+
+  const getActiveKey = (href: string) => pathname?.startsWith(href);
+
+  const renderBadge = (badgeKey?: string) => {
+    if (!badgeKey) return null;
+    const count = badgeCounts[badgeKey];
+    if (!count) return null;
+    return (
+      <span className="bg-light text-wine px-2 py-0.5 rounded-full text-xs font-semibold">
+        {count}
+      </span>
+    );
+  };
 
   return (
-    <aside className="p-4">
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="Search..."
-        className="w-full mb-4 p-2 rounded bg-background border border-border text-textPrimary"
-        value={searchValue}
-        onChange={(e) => setSearch(role, e.target.value)}
-      />
+    <>
+      <aside
+        ref={sidebarRef}
+        className={`fixed top-16 left-0 h-[calc(100%-4rem)] w-64 bg-wine text-switch font-sans shadow-lg transform transition-transform duration-300 ease-in-out z-50
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"} 
+          md:translate-x-0 md:top-16 md:h-[calc(100%-4rem)]`}
+      >
+        {/* Top user greeting */}
+        <div className="p-4 text-xl font-display border-b border-light hidden md:block">
+          {firstName}'s Dashboard
+        </div>
 
-      {/* Example sections */}
-      <div className="space-y-2">
-        <button
-          className="w-full text-left text-textPrimary"
-          onClick={() => toggleSection(role, "dashboard")}
-        >
-          Dashboard {collapsedSections["dashboard"] ? "▲" : "▼"}
-        </button>
-        {!collapsedSections["dashboard"] && (
-          <ul className="pl-4">
-            <li>
-              <Link href="/dashboard" onClick={onLinkClick}>
-                Main Dashboard
-              </Link>
-            </li>
-            {isSuperAdmin && (
-              <li>
-                <Link href="/admin" onClick={onLinkClick}>
-                  Super Admin
+        {/* Search input */}
+        <div className="p-4 border-b border-light flex items-center gap-2">
+          <MagnifyingGlassIcon className="w-5 h-5 text-switch" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={roleSearch}
+            onChange={(e) => setSearch(role, e.target.value)}
+            className="w-full px-2 py-1 rounded text-black focus:outline-none"
+          />
+        </div>
+
+        {/* Menu items */}
+        <nav className="flex-1 overflow-y-auto mt-2">
+          {filteredMenu.map((item) => (
+            <div key={item.key} className="mb-1">
+              {item.children ? (
+                <>
+                  <button
+                    className="w-full flex justify-between items-center px-4 py-2 font-semibold text-switch hover:bg-light hover:text-wine rounded"
+                    onClick={() => toggleSection(role, item.key)}
+                  >
+                    {item.label}
+                    {roleCollapsedSections[item.key] ? (
+                      <ChevronUpIcon className="w-4 h-4 text-switch" />
+                    ) : (
+                      <ChevronDownIcon className="w-4 h-4 text-switch" />
+                    )}
+                  </button>
+                  <div
+                    className={`overflow-hidden transition-max-h duration-300 ${
+                      roleCollapsedSections[item.key] ? "max-h-40" : "max-h-0"
+                    }`}
+                  >
+                    {item.children.map((child) => (
+                      <Link
+                        key={child.key}
+                        href={child.href}
+                        className={`flex justify-between items-center px-8 py-2 rounded hover:bg-light hover:text-wine ${
+                          getActiveKey(child.href)
+                            ? "bg-light text-wine font-bold"
+                            : "text-switch"
+                        }`}
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        <span>{child.label}</span>
+                        {renderBadge(child.badgeKey)}
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <Link
+                  href={item.href}
+                  className={`flex justify-between items-center px-4 py-2 rounded hover:bg-light hover:text-wine ${
+                    getActiveKey(item.href)
+                      ? "bg-light text-wine font-bold"
+                      : "text-switch"
+                  }`}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <span>{item.label}</span>
+                  {renderBadge(item.badgeKey)}
                 </Link>
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
-    </aside>
+              )}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black opacity-30 z-40 mt-16 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+    </>
   );
 }
