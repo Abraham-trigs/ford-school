@@ -21,12 +21,14 @@ interface SessionStore {
   loggedIn: boolean;
   loading: boolean;
   role: Role | null;
+  firstName: string; // ✅ derived
+  isSuperAdmin: boolean; // ✅ derived
 
   fetchSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 
-  setUser: (user: UserSession | null) => void; // ✅ new
+  setUser: (user: UserSession | null) => void;
   setRole: (role: Role) => void;
   clearRole: () => void;
 }
@@ -36,8 +38,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   loggedIn: false,
   loading: false,
   role: null,
+  firstName: "User",
+  isSuperAdmin: false,
 
-  // --- Fetch session from API ---
   fetchSession: async () => {
     set({ loading: true });
     try {
@@ -45,13 +48,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const data: SessionResponse = await res.json();
 
       if (data.loggedIn && data.user) {
+        const firstName = data.user.name?.split(" ")[0]?.trim() ?? "User";
         set({
           user: data.user,
           loggedIn: true,
           role: data.user.role,
+          firstName,
+          isSuperAdmin: data.user.role === "SUPERADMIN",
         });
 
-        // --- Fetch users if allowed ---
         const usersStore = useUsersStore.getState();
         if (!usersStore.hasFetchedUsers) {
           await usersStore.fetchUsersIfAllowed();
@@ -62,11 +67,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           user: null,
           loggedIn: false,
           role: null,
+          firstName: "User",
+          isSuperAdmin: false,
         });
       }
     } catch (err) {
       console.error("fetchSession error:", err);
-      set({ user: null, loggedIn: false, role: null });
+      set({
+        user: null,
+        loggedIn: false,
+        role: null,
+        firstName: "User",
+        isSuperAdmin: false,
+      });
     } finally {
       set({ loading: false });
     }
@@ -89,7 +102,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
     } catch (err) {
       console.error("login error:", err);
-      set({ user: null, loggedIn: false, role: null });
+      set({
+        user: null,
+        loggedIn: false,
+        role: null,
+        firstName: "User",
+        isSuperAdmin: false,
+      });
       throw err;
     } finally {
       set({ loading: false });
@@ -102,11 +121,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     } catch (err) {
       console.error("logout error:", err);
     } finally {
-      set({ user: null, loggedIn: false, loading: false, role: null });
+      set({
+        user: null,
+        loggedIn: false,
+        loading: false,
+        role: null,
+        firstName: "User",
+        isSuperAdmin: false,
+      });
     }
   },
 
-  setUser: (user) => set({ user, loggedIn: !!user, role: user?.role ?? null }), // ✅ safe update
-  setRole: (role) => set({ role }),
-  clearRole: () => set({ role: null }),
+  setUser: (user) =>
+    set({
+      user,
+      loggedIn: !!user,
+      role: user?.role ?? null,
+      firstName: user?.name?.split(" ")[0]?.trim() ?? "User",
+      isSuperAdmin: user?.role === "SUPERADMIN",
+    }),
+
+  setRole: (role) =>
+    set({
+      role,
+      isSuperAdmin: role === "SUPERADMIN",
+    }),
+
+  clearRole: () =>
+    set({
+      role: null,
+      isSuperAdmin: false,
+    }),
 }));

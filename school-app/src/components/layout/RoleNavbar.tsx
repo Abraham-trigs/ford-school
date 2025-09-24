@@ -8,63 +8,39 @@ import { useSessionStore } from "@/lib/store/sessionStore";
 
 export default function RoleNavbar() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const { user, loading, loggedIn } = useSessionStore();
 
-  const firstName = user?.name?.split(" ")[0] ?? "User";
-
-  // While session is being fetched → show spinner
-  if (loading) {
-    return (
-      <nav className="bg-wine text-back border-b border-light sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-center items-center h-16">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-light"></div>
-        </div>
-      </nav>
-    );
-  }
-
-  // If not logged in or no user data
-  if (!loggedIn || !user) {
-    return null;
-  }
+  // ✅ grab derived fields directly from the store
+  const { role, firstName, loggedIn } = useSessionStore();
 
   return (
-    <>
-      <nav className="bg-wine text-back border-b border-light sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
-          <Link
-            href={`/${user.role.toLowerCase()}/dashboard`}
-            className="text-xl font-bold text-back ml-2 md:ml-0"
-          >
-            FordSchools
-          </Link>
+    <nav className="bg-surface border-b border-border px-4 py-2 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <button
+          className="md:hidden text-textPrimary"
+          onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+        >
+          {mobileSidebarOpen ? <HiX size={24} /> : <HiMenu size={24} />}
+        </button>
+        <Link href="/" className="text-lg font-semibold text-textPrimary">
+          School App
+        </Link>
+      </div>
 
-          <div className="flex items-center gap-4">
-            {/* Mobile hamburger */}
-            <button
-              className="md:hidden p-2 rounded hover:bg-light"
-              onClick={() => setMobileSidebarOpen((prev) => !prev)}
-            >
-              {mobileSidebarOpen ? <HiX size={24} /> : <HiMenu size={24} />}
-            </button>
+      <div className="flex items-center gap-4">
+        {loggedIn && (
+          <span className="text-textSecondary">Hi, {firstName}</span>
+        )}
+      </div>
 
-            {/* Desktop user info */}
-            <div className="hidden md:flex items-center gap-6">
-              <button className="relative p-2 hover:text-light">🔔</button>
-              <button className="relative p-2 hover:text-light">💬</button>
-              <div className="p-2 rounded bg-light text-wine font-semibold">
-                {firstName} ({user.role})
-              </div>
-            </div>
-          </div>
+      {/* ✅ mobile sidebar */}
+      {mobileSidebarOpen && (
+        <div className="absolute top-12 left-0 w-3/4 max-w-xs h-screen bg-surface shadow-lg md:hidden">
+          <RoleSidebar
+            onLinkClick={() => setMobileSidebarOpen(false)}
+            role={role ?? ""}
+          />
         </div>
-      </nav>
-
-      {/* Sidebar */}
-      <RoleSidebar
-        mobileOpen={mobileSidebarOpen}
-        setMobileOpen={setMobileSidebarOpen}
-      />
-    </>
+      )}
+    </nav>
   );
 }

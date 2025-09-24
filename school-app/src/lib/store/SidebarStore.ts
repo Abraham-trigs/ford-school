@@ -9,15 +9,25 @@ interface SidebarStore {
   search: Record<string, string>;
   badgeCounts: Record<string, number>;
 
+  // UI Toggles
   toggleMobileSidebar: () => void;
   setMobileSidebarOpen: (open: boolean) => void;
+
+  // Section Management
   toggleSection: (role: string, key: string) => void;
   setCollapsedSections: (role: string, sections: Record<string, boolean>) => void;
+
+  // Search
   setSearch: (role: string, value: string) => void;
 
+  // Badges
   setBadgeCount: (key: string, count: number) => void;
   incrementBadge: (key: string, by?: number) => void;
   decrementBadge: (key: string, by?: number) => void;
+
+  // ✅ Helpers for components
+  getCollapsedSectionsForRole: (role: string) => Record<string, boolean>;
+  getSearchForRole: (role: string) => string;
 }
 
 export const useSidebarStore = create<SidebarStore>()(
@@ -31,9 +41,9 @@ export const useSidebarStore = create<SidebarStore>()(
       toggleMobileSidebar: () =>
         set((state) => ({ mobileSidebarOpen: !state.mobileSidebarOpen })),
 
-      setMobileSidebarOpen: (open: boolean) => set({ mobileSidebarOpen: open }),
+      setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
 
-      toggleSection: (role: string, key: string) => {
+      toggleSection: (role, key) => {
         const state = get();
         const roleSections = state.collapsedSections[role] || {};
         set({
@@ -47,23 +57,21 @@ export const useSidebarStore = create<SidebarStore>()(
         });
       },
 
-      setCollapsedSections: (role: string, sections: Record<string, boolean>) =>
+      setCollapsedSections: (role, sections) =>
         set((state) => ({
           collapsedSections: {
             ...state.collapsedSections,
-            [role]: sections,
+            [role]: { ...sections },
           },
         })),
 
-      setSearch: (role: string, value: string) => {
-        const state = get();
-        set({
+      setSearch: (role, value) =>
+        set((state) => ({
           search: {
             ...state.search,
             [role]: value,
           },
-        });
-      },
+        })),
 
       setBadgeCount: (key, count) =>
         set((state) => ({
@@ -85,6 +93,12 @@ export const useSidebarStore = create<SidebarStore>()(
             [key]: Math.max((state.badgeCounts[key] || 0) - by, 0),
           },
         })),
+
+      // ✅ New helpers
+      getCollapsedSectionsForRole: (role) =>
+        get().collapsedSections[role] || {},
+
+      getSearchForRole: (role) => get().search[role] || "",
     }),
     { name: "sidebar-storage" }
   )
