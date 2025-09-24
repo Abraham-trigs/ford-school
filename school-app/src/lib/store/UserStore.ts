@@ -17,7 +17,7 @@ interface UsersStore {
   staff: User[];
 
   hasFetchedUsers: boolean;
-  setHasFetchedUsers: (value: boolean) => void;
+  setHasFetchedUsesrs: (value: boolean) => void;
 
   fetchUsersIfAllowed: () => Promise<void>;
   addUser: (user: NewUserPayload) => Promise<void>;
