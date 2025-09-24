@@ -1,10 +1,13 @@
-import { create } from "zustand";
-import type { Role } from "@/types/school"; // import your Role enum
+"use client";
 
-interface UserSession {
+import { create } from "zustand";
+import type { Role } from "@/types/school";
+import { useUsersStore } from "@/lib/store/UserStore";
+
+export interface UserSession {
   id: string;
   email: string;
-  role: Role;      // now strongly typed
+  role: Role;
   name?: string;
 }
 
@@ -23,6 +26,7 @@ interface SessionStore {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 
+  setUser: (user: UserSession | null) => void; // ✅ new
   setRole: (role: Role) => void;
   clearRole: () => void;
 }
@@ -33,7 +37,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   loading: false,
   role: null,
 
-  // --- fetch session from JWT cookie ---
+  // --- Fetch session from API ---
   fetchSession: async () => {
     set({ loading: true });
     try {
@@ -46,6 +50,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           loggedIn: true,
           role: data.user.role,
         });
+
+        // --- Fetch users if allowed ---
+        const usersStore = useUsersStore.getState();
+        if (!usersStore.hasFetchedUsers) {
+          await usersStore.fetchUsersIfAllowed();
+          usersStore.setHasFetchedUsers(true);
+        }
       } else {
         set({
           user: null,
@@ -61,8 +72,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  // --- login via API + sync session from cookie ---
-  login: async (email: string, password: string) => {
+  login: async (email, password) => {
     set({ loading: true });
     try {
       const res = await fetch("/api/auth/login", {
@@ -70,7 +80,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await res.json();
 
       if (res.ok && data.success) {
@@ -87,7 +96,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  // --- logout: clear cookie + reset store ---
   logout: async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -98,6 +106,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  setRole: (role: Role) => set({ role }),
+  setUser: (user) => set({ user, loggedIn: !!user, role: user?.role ?? null }), // ✅ safe update
+  setRole: (role) => set({ role }),
   clearRole: () => set({ role: null }),
 }));

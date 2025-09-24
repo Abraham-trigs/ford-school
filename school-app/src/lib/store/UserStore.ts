@@ -16,10 +16,14 @@ interface UsersStore {
   parents: User[];
   staff: User[];
 
+  hasFetchedUsers: boolean;
+  setHasFetchedUsers: (value: boolean) => void;
+
   fetchUsersIfAllowed: () => Promise<void>;
   addUser: (user: NewUserPayload) => Promise<void>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  resetUsers: () => void;
 }
 
 interface NewUserPayload {
@@ -35,8 +39,6 @@ export const useUsersStore = create<UsersStore>()(
     (set, get) => {
       const recomputeDerived = (userMap: Record<string, User>, total: number) => {
         const allUsers = Object.values(userMap);
-
-        // Dynamically compute staff: all roles except STUDENT and PARENT
         const staffRoles = Object.values(Role).filter(
           (r) => r !== Role.STUDENT && r !== Role.PARENT
         );
@@ -59,20 +61,25 @@ export const useUsersStore = create<UsersStore>()(
         students: [],
         parents: [],
         staff: [],
+        hasFetchedUsers: false,
+
+        setHasFetchedUsers: (value: boolean) => set({ hasFetchedUsers: value }),
 
         fetchUsersIfAllowed: async () => {
+          if (get().hasFetchedUsers) return;
+
           const caller = useSessionStore.getState().user;
+          if (!caller) return;
 
           set({ userLoading: true });
 
           try {
             let queryString = "";
 
-            // SuperAdmin fetches all users
-            if (caller?.role !== Role.SUPERADMIN) {
+            if (caller.role !== Role.SUPERADMIN) {
               const rolesToFetch: Role[] = [];
 
-              switch (caller?.role) {
+              switch (caller.role) {
                 case Role.ADMIN:
                   rolesToFetch.push(...Object.values(Role));
                   break;
@@ -120,7 +127,10 @@ export const useUsersStore = create<UsersStore>()(
               userMap[u.id] = u;
             });
 
-            set(recomputeDerived(userMap, data.total));
+            set({
+              ...recomputeDerived(userMap, data.total),
+              hasFetchedUsers: true,
+            });
           } catch (err) {
             console.error("fetchUsersIfAllowed error:", err);
           } finally {
@@ -173,11 +183,22 @@ export const useUsersStore = create<UsersStore>()(
             console.error("deleteUser error:", err);
           }
         },
+
+        resetUsers: () =>
+          set({
+            userMap: {},
+            userIds: [],
+            totalUsers: 0,
+            students: [],
+            parents: [],
+            staff: [],
+            hasFetchedUsers: false,
+          }),
       };
     },
     {
       name: "users-store",
-      getStorage: () => localStorage,
+      getStorage: () => sessionStorage, // persist only per tab session
     }
   )
 );

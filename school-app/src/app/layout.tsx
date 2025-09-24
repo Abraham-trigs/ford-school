@@ -2,7 +2,6 @@ import "./globals.css";
 import { Lexend_Deca } from "next/font/google";
 import SessionProvider from "@/components/SessionProvider";
 
-// Lexend Deca font optimized by Next.js
 const lexendDeca = Lexend_Deca({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -22,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${lexendDeca.variable} font-sans antialiased`}>
-        {/* ✅ Wrap the whole app in the session logic */}
+        {/* SessionProvider is client-only */}
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

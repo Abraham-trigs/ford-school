@@ -7,7 +7,7 @@ interface SidebarStore {
   mobileSidebarOpen: boolean;
   collapsedSections: Record<string, Record<string, boolean>>;
   search: Record<string, string>;
-  badgeCounts: Record<string, number>; // <- badges centralized here
+  badgeCounts: Record<string, number>;
 
   toggleMobileSidebar: () => void;
   setMobileSidebarOpen: (open: boolean) => void;
@@ -15,9 +15,9 @@ interface SidebarStore {
   setCollapsedSections: (role: string, sections: Record<string, boolean>) => void;
   setSearch: (role: string, value: string) => void;
 
-  setBadgeCount: (key: string, count: number) => void; // <- new action
-  incrementBadge: (key: string, by?: number) => void; // optional helper
-  decrementBadge: (key: string, by?: number) => void; // optional helper
+  setBadgeCount: (key: string, count: number) => void;
+  incrementBadge: (key: string, by?: number) => void;
+  decrementBadge: (key: string, by?: number) => void;
 }
 
 export const useSidebarStore = create<SidebarStore>()(
@@ -33,16 +33,19 @@ export const useSidebarStore = create<SidebarStore>()(
 
       setMobileSidebarOpen: (open: boolean) => set({ mobileSidebarOpen: open }),
 
-      toggleSection: (role: string, key: string) =>
-        set((state) => ({
+      toggleSection: (role: string, key: string) => {
+        const state = get();
+        const roleSections = state.collapsedSections[role] || {};
+        set({
           collapsedSections: {
             ...state.collapsedSections,
             [role]: {
-              ...state.collapsedSections[role],
-              [key]: !state.collapsedSections[role]?.[key],
+              ...roleSections,
+              [key]: !roleSections[key],
             },
           },
-        })),
+        });
+      },
 
       setCollapsedSections: (role: string, sections: Record<string, boolean>) =>
         set((state) => ({
@@ -52,15 +55,16 @@ export const useSidebarStore = create<SidebarStore>()(
           },
         })),
 
-      setSearch: (role: string, value: string) =>
-        set((state) => ({
+      setSearch: (role: string, value: string) => {
+        const state = get();
+        set({
           search: {
             ...state.search,
             [role]: value,
           },
-        })),
+        });
+      },
 
-      // new badge actions
       setBadgeCount: (key, count) =>
         set((state) => ({
           badgeCounts: { ...state.badgeCounts, [key]: count },
@@ -82,8 +86,6 @@ export const useSidebarStore = create<SidebarStore>()(
           },
         })),
     }),
-    {
-      name: "sidebar-storage",
-    }
+    { name: "sidebar-storage" }
   )
 );

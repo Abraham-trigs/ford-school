@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HiEye, HiEyeOff } from "react-icons/hi";
 import { motion, Variants, easeOut } from "framer-motion";
 import LoginButton from "@/components/LoginButton";
@@ -9,6 +9,9 @@ import { useSessionStore } from "@/lib/store/sessionStore";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
+
   const { login, user, loggedIn, loading } = useSessionStore();
 
   const [email, setEmail] = useState("");
@@ -19,54 +22,20 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (!loading && loggedIn && user) {
-      redirectByRole(user.role);
+      redirectAfterLogin(user.role);
     }
   }, [loggedIn, loading, user]);
 
-  const redirectByRole = (role: string) => {
-    // Only redirect if user is on the login page
-    if (window.location.pathname === "/login") {
-      switch (role) {
-        case "SUPERADMIN":
-          router.replace("/superadmin/dashboard");
-          break;
-        case "ADMIN":
-          router.replace("/admin/dashboard");
-          break;
-        case "TEACHER":
-          router.replace("/teacher/dashboard");
-          break;
-        case "SECRETARY":
-          router.replace("/secretary/dashboard");
-          break;
-        case "ACCOUNTANT":
-          router.replace("/accountant/dashboard");
-          break;
-        case "LIBRARIAN":
-          router.replace("/librarian/dashboard");
-          break;
-        case "COUNSELOR":
-          router.replace("/counselor/dashboard");
-          break;
-        case "NURSE":
-          router.replace("/nurse/dashboard");
-          break;
-        case "CLEANER":
-        case "JANITOR":
-        case "COOK":
-        case "KITCHEN_ASSISTANT":
-          router.replace("/staff/dashboard");
-          break;
-        case "STUDENT":
-          router.replace("/student/dashboard");
-          break;
-        case "PARENT":
-          router.replace("/parent/dashboard");
-          break;
-        default:
-          router.replace("/");
-      }
+  const redirectAfterLogin = (role: string) => {
+    if (redirectTo) {
+      router.replace(redirectTo);
+      return;
     }
+
+    // Dynamically compute dashboard route
+    const roleLower = role.toLowerCase();
+    const defaultDashboard = `/${roleLower}/dashboard`;
+    router.replace(defaultDashboard);
   };
 
   const handleLogin = async () => {
@@ -74,9 +43,9 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-
-      const { loggedIn, user } = useSessionStore.getState();
-      if (loggedIn && user) redirectByRole(user.role);
+      const { loggedIn: newLoggedIn, user: newUser } =
+        useSessionStore.getState();
+      if (newLoggedIn && newUser) redirectAfterLogin(newUser.role);
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Login failed. Please try again."
