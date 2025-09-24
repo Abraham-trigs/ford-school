@@ -1,35 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { HiMenu, HiX } from "react-icons/hi";
 import RoleSidebar from "./RoleSidebar";
 import { useSessionStore } from "@/lib/store/sessionStore";
-import { useUsersStore } from "@/lib/store/UserStore";
 
 export default function RoleNavbar() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const toggleSidebar = () => setMobileSidebarOpen((prev) => !prev);
 
-  const { user } = useSessionStore(); // logged-in user
+  // ✅ Get user info directly from session store
+  const { user } = useSessionStore();
   const role = user?.role ?? "";
-  const roleLower = role ? role.toLowerCase() : "";
+  const roleLower = role.toLowerCase();
   const firstName = user?.name?.split(" ")[0]?.trim() ?? "User";
-
-  const { fetchUsersIfAllowed } = useUsersStore();
-
-  // Fetch users on mount (safe, no loop)
-  useEffect(() => {
-    fetchUsersIfAllowed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <>
       <nav className="bg-wine text-back border-b border-light sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
           <Link
-            href={roleLower ? `/${roleLower}/dashboard` : "/"}
+            href={role ? `/${roleLower}/dashboard` : "/"}
             className="text-xl font-bold text-back ml-2 md:ml-0"
           >
             FordSchools

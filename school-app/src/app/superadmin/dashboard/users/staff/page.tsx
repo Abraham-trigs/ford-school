@@ -84,7 +84,7 @@ export default function StaffPage() {
 
   return (
     <div className="p-6 space-y-8">
-      <h1 className="text-xl font-bold">Manage All Staff</h1>
+      <h1 className="text-xl font-bold">Staff Management</h1>
 
       {/* ---------------- NEW STAFF FORM ---------------- */}
       <form
