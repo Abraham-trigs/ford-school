@@ -99,8 +99,8 @@ export default function RoleSidebar({
           md:translate-x-0 md:top-16 md:h-[calc(100%-4rem)]`}
       >
         {/* Top user greeting */}
-        <div className="p-4 text-xl font-display border-b border-light hidden md:block">
-          {firstName}'s Dashboard
+        <div className="p-4 text-xl text-back font-display border-b border-light hidden md:block">
+          Hi, {firstName}
         </div>
 
         {/* Search input */}
