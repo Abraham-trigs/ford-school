@@ -20,7 +20,6 @@ interface SessionStore {
   role: Role | null;
   firstName: string;
   isSuperAdmin: boolean;
-  sessionFetched: boolean; // NEW FLAG
 
   fetchSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -38,12 +37,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   role: null,
   firstName: "User",
   isSuperAdmin: false,
-  sessionFetched: false, // NEW
 
   fetchSession: async () => {
-    const state = get();
-    if (state.sessionFetched) return; // skip if already fetched
-
     set({ loading: true });
     try {
       const res = await fetch("/api/auth/session");
@@ -58,6 +53,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           usersStore.setHasFetchedUsers(true);
         }
 
+        // Pull full user info from UsersStore if available
         const fullUser = usersStore.userMap[data.user.id] ?? data.user;
         const firstName = fullUser.name?.split(" ")[0]?.trim() ?? "User";
 
@@ -67,7 +63,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           role: fullUser.role,
           firstName,
           isSuperAdmin: fullUser.role === "SUPERADMIN",
-          sessionFetched: true, // mark as fetched
         });
       } else {
         set({
@@ -76,7 +71,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           role: null,
           firstName: "User",
           isSuperAdmin: false,
-          sessionFetched: true,
         });
       }
     } catch (err) {
@@ -87,7 +81,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         role: null,
         firstName: "User",
         isSuperAdmin: false,
-        sessionFetched: true,
       });
     } finally {
       set({ loading: false });
@@ -138,7 +131,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         role: null,
         firstName: "User",
         isSuperAdmin: false,
-        sessionFetched: false, // reset flag
       });
     }
   },

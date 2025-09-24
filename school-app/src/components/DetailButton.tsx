@@ -1,27 +1,31 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 interface DetailButtonProps {
   id: string;
   name?: string;
-  basePath: string;
   className?: string;
 }
 
 export default function DetailButton({
   id,
   name,
-  basePath,
   className,
 }: DetailButtonProps) {
-  const slug = name?.toLowerCase().replace(/\s+/g, "-") || id;
+  const pathname = usePathname(); // e.g., "/superadmin/dashboard/users/staff"
+
+  // Remove any trailing slashes and append the user id
+  const basePath = pathname.replace(/\/$/, "");
+  const href = `${basePath}/${id}`;
+
   return (
     <Link
-      href={`${basePath}/${slug}`}
+      href={href}
       className={`px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-center rounded font-medium ${className}`}
     >
-      Details
+      {name ? `${name}` : "Details"}
     </Link>
   );
 }
