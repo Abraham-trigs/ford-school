@@ -6,6 +6,20 @@ const prisma = new PrismaClient();
 async function main() {
   const password = await bcrypt.hash("SuperAdmin123!", 10);
 
+  // Ensure UserStatus exists
+  const activeStatus = await prisma.userStatus.upsert({
+    where: { name: "ACTIVE" },
+    update: {},
+    create: { name: "ACTIVE" },
+  });
+
+  // Ensure SUPERADMIN Role exists
+  const superAdminRole = await prisma.roleModel.upsert({
+    where: { name: "SUPERADMIN" },
+    update: {},
+    create: { name: "SUPERADMIN" },
+  });
+
   // Create your SuperAdmin account
   const superAdmin = await prisma.user.upsert({
     where: { email: "abraham@fordschoolsltd.com" },
@@ -15,8 +29,8 @@ async function main() {
       email: "abraham@fordschoolsltd.com",
       phone: "0208660068",
       password,
-      role: "SUPERADMIN",
-      status: "ACTIVE",
+      roleId: superAdminRole.id,
+      statusId: activeStatus.id,
     },
   });
 
