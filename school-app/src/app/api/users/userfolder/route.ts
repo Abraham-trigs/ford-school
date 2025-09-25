@@ -69,20 +69,20 @@ interface UserFolder {
 
 // ------------------ Roles List ------------------
 const ROLES: Role[] = [
-  "TEACHER",
-  "SECRETARY",
-  "ACCOUNTANT",
-  "LIBRARIAN",
-  "COUNSELOR",
-  "NURSE",
-  "CLEANER",
-  "JANITOR",
-  "COOK",
-  "KITCHEN_ASSISTANT",
-  "STUDENT",
-  "PARENT",
-  "ADMIN",
-  "SUPERADMIN",
+  Role.TEACHER,
+  Role.SECRETARY,
+  Role.ACCOUNTANT,
+  Role.LIBRARIAN,
+  Role.COUNSELOR,
+  Role.NURSE,
+  Role.CLEANER,
+  Role.JANITOR,
+  Role.COOK,
+  Role.KITCHEN_ASSISTANT,
+  Role.STUDENT,
+  Role.PARENT,
+  Role.ADMIN,
+  Role.SUPERADMIN,
 ];
 
 // ------------------ GET Handler ------------------

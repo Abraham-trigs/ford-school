@@ -8,28 +8,6 @@ datasource db {
 }
 
 // ------------------ ENUMS ------------------
-enum Role {
-  SUPERADMIN
-  ADMIN
-  TEACHER
-  SECRETARY
-  ACCOUNTANT
-  LIBRARIAN
-  COUNSELOR
-  NURSE
-  CLEANER
-  JANITOR
-  COOK
-  KITCHEN_ASSISTANT
-  STUDENT
-  PARENT
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
 
 enum AttendanceSessionType {
   STUDENT_CLASS
@@ -158,14 +136,43 @@ enum DisciplineType {
 }
 
 // ------------------ MODELS ------------------
+
+// Dynamic User Statuses
+model UserStatus {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+}
+
+// Dynamic Roles
+model RoleModel {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
+
+  // Self-relation Many-to-Many
+  relatedRoles RoleModel[] @relation("RoleRelations")
+  relatedBy    RoleModel[] @relation("RoleRelations")
+
+  users       User[]
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
   email        String?   @unique
   phone        String?
   password     String
-  role         Role
-  status       UserStatus @default(ACTIVE)
+
+  roleId       String
+  role         RoleModel @relation(fields: [roleId], references: [id])
+
+  statusId     String
+  status       UserStatus @relation(fields: [statusId], references: [id])
+
   profilePic   String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -175,33 +182,41 @@ model User {
   parentOf     Student[] @relation("UserParentOf")
   parents      Student[] @relation("UserParents")
 
-  payments     Payment[] @relation("PaymentUser")
-  issuedPayments Payment[] @relation("PaymentIssuer")
-  invoices     Invoice[]
+  payments        Payment[] @relation("PaymentUser")
+  issuedPayments  Payment[] @relation("PaymentIssuer")
+  invoices        Invoice[]
   attendanceRecords AttendanceRecord[]
 
-  createdEvents SchoolEvent[] @relation("EventCreator")
-  events        SchoolEvent[] @relation("EventParticipants")
+  createdEvents   SchoolEvent[] @relation("EventCreator")
+  events          SchoolEvent[] @relation("EventParticipants")
 
-  borrowedBooks LibraryLog[] @relation("LibraryUser")
+  borrowedBooks   LibraryLog[] @relation("LibraryUser")
   drivingVehicles TransportVehicle[] @relation("VehicleDriver")
   issuedDisciplineLogs DisciplineLog[] @relation("DisciplineIssuer")
   createdAnnouncements Announcement[]
 
-  createdVisitorLogs VisitorLog[] @relation("VisitorCreated")
-  visitedVisitorLogs VisitorLog[] @relation("VisitorVisited")
+  createdVisitorLogs  VisitorLog[] @relation("VisitorCreated")
+  visitedVisitorLogs  VisitorLog[] @relation("VisitorVisited")
   approvedVisitorLogs VisitorLog[] @relation("VisitorApproved")
 
-  subjectAssignments SubjectAssignment[]
+  subjectAssignments      SubjectAssignment[]
   attendanceSessionsTaken AttendanceSession[] @relation("AttendanceTeacher")
-  promotionsDecided Promotion[] @relation("PromotionDecider")
-  schoolExpensesPaid SchoolExpense[] @relation("ExpensePaidBy")
-  schoolIncomesRecorded SchoolIncome[] @relation("IncomeRecordedBy")
-  departments Department[] @relation("DepartmentOwner")
-  sectionsTaught Section[] @relation("SectionTeacher")
+  promotionsDecided       Promotion[] @relation("PromotionDecider")
+  schoolExpensesPaid      SchoolExpense[] @relation("ExpensePaidBy")
+  schoolIncomesRecorded   SchoolIncome[] @relation("IncomeRecordedBy")
+  departments             Department[] @relation("DepartmentOwner")
+  sectionsTaught          Section[] @relation("SectionTeacher")
+
+  timetables        Timetable[] @relation("TimetableTeacher")
 
   performedAssetLogs AssetLog[] @relation("PerformedAssetLogs")
+  classworks        Classwork[] @relation("ClassworkTeacher")
+
+  @@index([roleId])
+  @@index([statusId])
 }
+
+// ------------------ Core School Models ------------------
 
 model Staff {
   id        String   @id @default(cuid())
@@ -210,6 +225,8 @@ model Staff {
   user      User     @relation(fields: [userId], references: [id])
   salaries  StaffSalary[] @relation("SalaryIssuer")
   departments Department[] @relation("DepartmentStaff")
+
+  @@index([userId])
 }
 
 model Student {
@@ -222,6 +239,10 @@ model Student {
   parents   User[]   @relation("UserParents")
   parentOf  User[]   @relation("UserParentOf")
   promotions Promotion[]
+  classworks Classwork[]
+
+  @@unique([rollNo, sectionId])
+  @@index([sectionId])
 }
 
 model Section {
@@ -234,6 +255,10 @@ model Section {
   exams     Exam[]
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
+  timetables   Timetable[]
+
+  @@index([teacherId])
+  @@index([departmentId])
 }
 
 model AttendanceRecord {
@@ -244,6 +269,10 @@ model AttendanceRecord {
   date      DateTime
   sessionId String?
   session   AttendanceSession? @relation("AttendanceSessionRecords", fields: [sessionId], references: [id])
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([status])
 }
 
 model AttendanceSession {
@@ -254,7 +283,84 @@ model AttendanceSession {
   sectionId String
   section   Section               @relation("AttendanceSection", fields: [sectionId], references: [id])
   records   AttendanceRecord[] @relation("AttendanceSessionRecords")
+
+  @@index([teacherId])
+  @@index([sectionId])
+  @@index([type])
 }
+
+// ------------------ Academic Models ------------------
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments SubjectAssignment[]
+  classworks  Classwork[]
+  timetables  Timetable[]
+}
+
+model AssessmentType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  classworks Classwork[]
+}
+
+model Classwork {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  teacherId String
+  teacher   User     @relation("ClassworkTeacher", fields: [teacherId], references: [id])
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  typeId    String
+  type      AssessmentType @relation(fields: [typeId], references: [id])
+  score     Float?
+  remarks   String?
+  createdAt DateTime @default(now())
+
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([subjectId])
+  @@index([typeId])
+}
+
+model Timetable {
+  id        String   @id @default(cuid())
+  sectionId String
+  section   Section  @relation(fields: [sectionId], references: [id])
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  teacherId String
+  teacher   User     @relation("TimetableTeacher", fields: [teacherId], references: [id])
+  dayOfWeek Int      // 0 = Sunday, 1 = Monday, etc.
+  startTime DateTime
+  endTime   DateTime
+
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([teacherId])
+}
+
+model SubjectAssignment {
+  id        String @id @default(cuid())
+  teacherId String
+  teacher   User @relation(fields: [teacherId], references: [id])
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+
+  @@index([teacherId])
+  @@index([subjectId])
+}
+
+// ------------------ Finance Models ------------------
 
 model Payment {
   id          String      @id @default(cuid())
@@ -268,6 +374,11 @@ model Payment {
   issuedById  String?
   issuedBy    User?       @relation("PaymentIssuer", fields: [issuedById], references: [id])
   createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([issuedById])
+  @@index([status])
 }
 
 model Invoice {
@@ -277,7 +388,11 @@ model Invoice {
   userId      String
   user        User         @relation(fields: [userId], references: [id])
   createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   receipts    Receipt[]
+
+  @@index([userId])
+  @@index([status])
 }
 
 model Receipt {
@@ -287,23 +402,10 @@ model Receipt {
   type      ReceiptType
   status    ReceiptStatus @default(ISSUED)
   issuedAt  DateTime    @default(now())
-}
+  updatedAt DateTime    @updatedAt
 
-model Promotion {
-  id          String @id @default(cuid())
-  studentId   String
-  student     Student @relation(fields: [studentId], references: [id])
-  term        Int?
-  decision    PromotionDecision
-  decidedById String
-  decidedBy   User @relation("PromotionDecider", fields: [decidedById], references: [id])
-}
-
-model SubjectAssignment {
-  id        String @id @default(cuid())
-  teacherId String
-  teacher   User @relation(fields: [teacherId], references: [id])
-  subject   String
+  @@index([invoiceId])
+  @@index([status])
 }
 
 model StaffSalary {
@@ -314,6 +416,10 @@ model StaffSalary {
   payPeriod  PaymentType
   status     PaymentStatus @default(PENDING)
   method     PaymentMethod
+  updatedAt  DateTime @updatedAt
+
+  @@index([staffId])
+  @@index([status])
 }
 
 model SchoolExpense {
@@ -323,6 +429,9 @@ model SchoolExpense {
   paidById  String?
   paidBy    User? @relation("ExpensePaidBy", fields: [paidById], references: [id])
   expenseDate DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([paidById])
 }
 
 model SchoolIncome {
@@ -334,7 +443,12 @@ model SchoolIncome {
   recordedById String?
   recordedBy   User? @relation("IncomeRecordedBy", fields: [recordedById], references: [id])
   receivedAt   DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([recordedById])
 }
+
+// ------------------ School Operations ------------------
 
 model Department {
   id        String @id @default(cuid())
@@ -343,6 +457,8 @@ model Department {
   sections  Section[]
   ownerId   String?
   owner     User? @relation("DepartmentOwner", fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model Asset {
@@ -353,6 +469,7 @@ model Asset {
   condition   AssetCondition
   quantity    Int     @default(1)
   location    String?
+  updatedAt   DateTime @updatedAt
 }
 
 model AssetLog {
@@ -363,6 +480,9 @@ model AssetLog {
   performedById String
   performedBy  User @relation("PerformedAssetLogs", fields: [performedById], references: [id])
   createdAt  DateTime @default(now())
+
+  @@index([assetId])
+  @@index([performedById])
 }
 
 model VisitorLog {
@@ -381,6 +501,11 @@ model VisitorLog {
   createdBy     User @relation("VisitorCreated", fields: [createdById], references: [id])
   approvedById  String?
   approvedBy    User? @relation("VisitorApproved", fields: [approvedById], references: [id])
+
+  @@index([visitedUserId])
+  @@index([createdById])
+  @@index([approvedById])
+  @@index([status])
 }
 
 model SchoolEvent {
@@ -394,6 +519,9 @@ model SchoolEvent {
   createdById String
   createdBy   User   @relation("EventCreator", fields: [createdById], references: [id])
   participants User[] @relation("EventParticipants")
+
+  @@index([createdById])
+  @@index([eventType])
 }
 
 model LibraryLog {
@@ -404,6 +532,10 @@ model LibraryLog {
   action    LibraryAction
   borrowedAt DateTime @default(now())
   returnedAt DateTime?
+
+  @@index([bookId])
+  @@index([userId])
+  @@index([action])
 }
 
 model TransportVehicle {
@@ -414,6 +546,9 @@ model TransportVehicle {
   driver    User? @relation("VehicleDriver", fields: [driverId], references: [id])
   acquiredAt DateTime?
   condition  AssetCondition
+  updatedAt  DateTime @updatedAt
+
+  @@index([driverId])
 }
 
 model DisciplineLog {
@@ -424,6 +559,10 @@ model DisciplineLog {
   type      DisciplineType
   notes     String?
   createdAt DateTime @default(now())
+
+  @@index([studentId])
+  @@index([issuedById])
+  @@index([type])
 }
 
 model Announcement {
@@ -432,6 +571,9 @@ model Announcement {
   createdById String
   createdBy User @relation(fields: [createdById], references: [id])
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
 }
 
 model Exam {
@@ -442,4 +584,21 @@ model Exam {
   startDate  DateTime
   endDate    DateTime
   examType   ExamType
+
+  @@index([sectionId])
+  @@index([examType])
+}
+
+model Promotion {
+  id          String @id @default(cuid())
+  studentId   String
+  student     Student @relation(fields: [studentId], references: [id])
+  term        Int?
+  decision    PromotionDecision
+  decidedById String
+  decidedBy   User @relation("PromotionDecider", fields: [decidedById], references: [id])
+
+  @@index([studentId])
+  @@index([decidedById])
+  @@index([decision])
 }

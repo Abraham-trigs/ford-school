@@ -1,20 +1,20 @@
 // -------------------- ENUMS --------------------
-export enum Role {
-  SUPERADMIN = "SUPERADMIN",
-  ADMIN = "ADMIN",
-  TEACHER = "TEACHER",
-  SECRETARY = "SECRETARY",
-  ACCOUNTANT = "ACCOUNTANT",
-  LIBRARIAN = "LIBRARIAN",
-  COUNSELOR = "COUNSELOR",
-  NURSE = "NURSE",
-  CLEANER = "CLEANER",
-  JANITOR = "JANITOR",
-  COOK = "COOK",
-  KITCHEN_ASSISTANT = "KITCHEN_ASSISTANT",
-  STUDENT = "STUDENT",
-  PARENT = "PARENT",
-}
+const ROLES: Role[] = [
+  Role.TEACHER,
+  Role.SECRETARY,
+  Role.ACCOUNTANT,
+  Role.LIBRARIAN,
+  Role.COUNSELOR,
+  Role.NURSE,
+  Role.CLEANER,
+  Role.JANITOR,
+  Role.COOK,
+  Role.KITCHEN_ASSISTANT,
+  Role.STUDENT,
+  Role.PARENT,
+  Role.ADMIN,
+  Role.SUPERADMIN,
+];
 
 // User session type for Zustand
 export interface UserSession {
