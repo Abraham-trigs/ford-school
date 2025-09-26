@@ -1,7 +1,7 @@
 // lib/auth/session.ts
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyJWT } from "@/lib/auth";
+import { verifyJWT } from "@/lib/auth/auth";
 import { getUserInclude } from "@/lib/prisma/includes";
 
 /**

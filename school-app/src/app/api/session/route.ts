@@ -1,14 +1,18 @@
 // app/api/session/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyJWT } from "@/lib/auth";
+import { verifyJWT } from "@/lib/auth/auth";
 import { getUserInclude } from "@/lib/prisma/includes";
 
 // ----------------------------
 // GET /api/session -> fetch session + user
 // ----------------------------
+// app/api/session/route.ts
 export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const type = url.searchParams.get("type") ?? "light"; // default to light
+
     const token = req.cookies.get("token")?.value;
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -18,10 +22,7 @@ export async function GET(req: NextRequest) {
 
     const session = await prisma.sessionData.findUnique({
       where: { sessionKey: payload.sessionKey },
-      include: {
-        user: getUserInclude(undefined, true), // full include for SessionStore
-        userSessionUpdates: true,
-      },
+      include: getSessionInclude(undefined, type === "full"),
     });
 
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
 
 // ----------------------------
 // POST /api/session -> create or refresh session

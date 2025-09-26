@@ -1,23 +1,30 @@
 // lib/store/sessionStore.ts
 import { create } from "zustand";
-import { fetchUserData, patchSessionData } from "@/lib/api/sessionApi";
+import { fetchUserData, patchSessionData, SessionUpdates } from "@/lib/api/sessionApi";
 import { v4 as uuidv4 } from "uuid";
+import { Prisma } from "@prisma/client";
+import {
+  userLightBase,
+  userFullBase,
+  getUserInclude,
+} from "@/lib/prisma/includes";
+
+// Type-safe User payloads
+type UserLight = Prisma.UserGetPayload<{ include: typeof userLightBase }>;
+type UserFull = Prisma.UserGetPayload<{ include: typeof userFullBase }>;
 
 interface SessionStoreState {
-  userId: string | null;
   sessionKey: string | null;
-  pageData: Record<string, any>;
+  fullUserData: UserFull | null;
+  pageData: Record<string, UserLight | UserFull>;
   pageSessionKeys: Record<string, string>;
   sessionValid: (page: string) => boolean;
 
-  // activity tracking
-  sessionActivity: Record<string, any>;
+  sessionActivity: Partial<SessionUpdates>;
 
-  // setters
-  setUserId: (id: string) => void;
   refreshSessionKey: () => void;
-  fetchPageData: (page: string, useFull?: boolean) => Promise<any>;
-  updateSession: (activity: Partial<Record<string, any>>, reason?: string) => void;
+  fetchPageData: (page: string, useFull?: boolean, pageIncludes?: any) => Promise<UserLight | UserFull>;
+  updateSession: (activity: Partial<SessionUpdates>, reason?: string) => void;
   clearSession: () => void;
 }
 
@@ -27,8 +34,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
   let debounceTimer: NodeJS.Timeout | null = null;
 
   return {
-    userId: null,
     sessionKey: null,
+    fullUserData: null,
     pageData: {},
     pageSessionKeys: {},
     sessionActivity: {},
@@ -39,74 +46,65 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
       return currentKey && pageKey === currentKey;
     },
 
-    setUserId: (id) => {
+    refreshSessionKey: () => {
       const newKey = uuidv4();
       set({
-        userId: id,
         sessionKey: newKey,
-        pageData: {},
         pageSessionKeys: {},
         sessionActivity: {},
       });
     },
 
-    refreshSessionKey: () => {
-      const newKey = uuidv4();
-      set((state) => ({
-        sessionKey: newKey,
-        pageSessionKeys: {},
-        sessionActivity: {},
-      }));
-    },
+fetchPageData: async (page, useFull = false, pageInclude?: Record<string, boolean>) => {
+  const { sessionKey, pageSessionKeys, fullUserData, pageData } = get();
+  if (!sessionKey) throw new Error("No session key found");
 
-    fetchPageData: async (page, useFull = false) => {
-      const { userId, sessionKey, pageSessionKeys, pageData } = get();
-      if (!userId) throw new Error("No userId found in session");
+  if (get().sessionValid(page)) return pageData[page];
 
-      if (get().sessionValid(page)) return pageData[page];
+  let data;
+  if (useFull && !fullUserData) {
+    // First mount: fetch full user
+    data = await fetchUserData("", "full"); 
+    set({ fullUserData: data as UserFull });
+  } else {
+    // Only fetch includes needed for this page
+    data = await fetchUserData("", "light", pageInclude ?? userLightBase);
+  }
 
-      const data = await fetchUserData(userId, useFull ? "full" : "light");
+  // Update current page cache
+  set((state) => ({
+    pageData: { ...state.pageData, [page]: data },
+    pageSessionKeys: { ...state.pageSessionKeys, [page]: state.sessionKey! },
+  }));
 
-      set((state) => ({
-        pageData: { ...state.pageData, [page]: data },
-        pageSessionKeys: { ...state.pageSessionKeys, [page]: sessionKey },
-      }));
+  // Silent merge other pages
+  if (fullUserData && page !== "fullUser") {
+    const updatedPages: Record<string, UserLight | UserFull> = {};
+    Object.keys(pageData).forEach((p) => {
+      if (p !== page && pageSessionKeys[p] !== sessionKey) {
+        updatedPages[p] = { ...pageData[p], ...fullUserData };
+      }
+    });
+    if (Object.keys(updatedPages).length > 0) {
+      set((state) => ({ pageData: { ...state.pageData, ...updatedPages } }));
+    }
+  }
 
-      return data;
-    },
+  return data;
+}
 
-    /**
-     * updateSession
-     * Merge front-end activity with existing state and sync with backend.
-     * @param activity Partial session activity to merge
-     * @param reason Optional reason for the update (e.g., 'manual refresh', 'form entry')
-     */
     updateSession: (activity, reason = "activity update") => {
-      // Merge new activity into existing sessionActivity
       set((state) => ({
-        sessionActivity: {
-          ...state.sessionActivity,
-          ...Object.keys(activity).reduce((acc, key) => {
-            // For arrays, append instead of replacing
-            if (Array.isArray(activity[key])) {
-              acc[key] = [...(state.sessionActivity[key] || []), ...activity[key]];
-            } else {
-              acc[key] = activity[key];
-            }
-            return acc;
-          }, {} as Record<string, any>),
-        },
+        sessionActivity: { ...state.sessionActivity, ...activity },
       }));
 
-      // Debounced backend sync
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(async () => {
         const { sessionActivity, sessionKey } = get();
         if (!sessionKey || Object.keys(sessionActivity).length === 0) return;
 
         try {
-          await patchSessionData({ ...sessionActivity, updateReason: reason }); // call PATCH API
-          // Clear local sessionActivity after successful sync
+          await patchSessionData({ ...sessionActivity, updateReason: reason });
           set({ sessionActivity: {} });
         } catch (err) {
           console.error("Failed to sync session activity:", err);
@@ -116,8 +114,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
 
     clearSession: () =>
       set({
-        userId: null,
         sessionKey: null,
+        fullUserData: null,
         pageData: {},
         pageSessionKeys: {},
         sessionActivity: {},
