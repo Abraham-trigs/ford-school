@@ -15,7 +15,6 @@
 
 # production
 /build
-/schema.prisma
 
 #environement files
 .env 
