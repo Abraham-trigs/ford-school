@@ -1,7 +1,7 @@
 // src/app/api/auth/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma/prisma";
 import { signJWT, setJWTCookie } from "@/lib/auth/auth";
 import { getUserInclude } from "@/lib/prisma/includes";
 import { v4 as uuidv4 } from "uuid";

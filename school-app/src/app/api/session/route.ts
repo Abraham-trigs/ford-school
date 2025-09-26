@@ -1,13 +1,12 @@
 // app/api/session/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma/prisma";
 import { verifyJWT } from "@/lib/auth/auth";
-import { getUserInclude } from "@/lib/prisma/includes";
+import { getSessionInclude, getUserInclude } from "@/lib/prisma/includes";
 
 // ----------------------------
 // GET /api/session -> fetch session + user
 // ----------------------------
-// app/api/session/route.ts
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
@@ -22,7 +21,10 @@ export async function GET(req: NextRequest) {
 
     const session = await prisma.sessionData.findUnique({
       where: { sessionKey: payload.sessionKey },
-      include: getSessionInclude(undefined, type === "full"),
+      include: {
+        ...getSessionInclude(undefined, type === "full"),
+        user: getUserInclude(undefined, type === "full"),
+      },
     });
 
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -33,7 +35,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 
 // ----------------------------
 // POST /api/session -> create or refresh session
@@ -48,6 +49,10 @@ export async function POST(req: NextRequest) {
 
     const session = await prisma.sessionData.create({
       data: { userId, sessionKey, device, ip, createdAt: new Date(), expiresAt },
+      include: {
+        ...getSessionInclude(undefined, true), // full session include
+        user: getUserInclude(undefined, true),  // full user include
+      },
     });
 
     return NextResponse.json({ session });
@@ -71,15 +76,13 @@ export async function PATCH(req: NextRequest) {
 
     const updates = await req.json();
 
-    // Merge existing JSON arrays if provided (incremental)
+    // Fetch existing session
     const existingSession = await prisma.sessionData.findUnique({
       where: { sessionKey: payload.sessionKey },
     });
-
     if (!existingSession) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-    const mergedUpdates: Record<string, any> = { ...updates };
-
+    // Merge array fields incrementally
     const arrayFields = [
       "pagesVisited",
       "clicks",
@@ -90,6 +93,7 @@ export async function PATCH(req: NextRequest) {
       "scrollPositions",
     ];
 
+    const mergedUpdates: Record<string, any> = { ...updates };
     for (const field of arrayFields) {
       if (updates[field]) {
         mergedUpdates[field] = [...(existingSession[field] || []), ...updates[field]];
@@ -107,6 +111,10 @@ export async function PATCH(req: NextRequest) {
         userSessionUpdates: {
           create: { updatedAt: new Date(), updateReason: "session update" },
         },
+      },
+      include: {
+        ...getSessionInclude(undefined, true), // full session include
+        user: getUserInclude(undefined, true),  // full user include
       },
     });
 

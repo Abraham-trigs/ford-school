@@ -1,10 +1,10 @@
 // lib/api/sessionApi.ts
 import { fetch } from "next/dist/compiled/@edge-runtime/primitives/fetch";
-import { userLightBase, userFullBase } from "@/lib/prisma/includes";
 import { Prisma } from "@prisma/client";
+import {  userFullBase,  } from "@/lib/prisma/includes";
 
-// Type-safe session update based on Prisma includes
-export type SessionUpdates = Partial<{
+// Type-safe session updates
+export type SessionUpdates<T extends Prisma.UserInclude = typeof userFullBase> = Partial<{
   pagesVisited: string[];
   clicks: string[];
   keyboardInputs: string[];
@@ -17,22 +17,19 @@ export type SessionUpdates = Partial<{
   cookiesData: Record<string, string>;
   activeTime: number;
 
-  // Optional per-page includes
-  includes: Partial<Record<keyof typeof userFullBase, boolean>>;
+  // Optional Prisma-style includes for selective user data
+  includes: Partial<T>;
 }>;
 
 /**
  * fetchUserData
- * Fetches session + user from backend.
- * @param userId - currently unused, kept for interface compatibility
- * @param type - "light" returns minimal user/session, "full" returns everything
- * @param include - optional Prisma-style include object for selective page-level data
+ * Fetches session + user from backend with optional type-safe includes
  */
-export const fetchUserData = async (
+export const fetchUserData = async <T extends Prisma.UserInclude = typeof userFullBase>(
   userId: string,
   type: "full" | "light" = "light",
-  include?: Partial<Record<keyof typeof userFullBase, boolean>>
-) => {
+  include?: Partial<T>
+): Promise<T extends typeof userFullBase ? Prisma.UserGetPayload<{ include: T }> : any> => {
   try {
     const res = await fetch(`/api/session`, {
       method: "POST",
@@ -48,7 +45,7 @@ export const fetchUserData = async (
       return {
         user: data.session.user,
         sessionKey: data.session.sessionKey,
-      };
+      } as any;
     }
 
     return data.session;
@@ -60,7 +57,6 @@ export const fetchUserData = async (
 
 /**
  * createSession
- * Creates a new session in backend.
  */
 export const createSession = async (userId: string, device?: string, ip?: string) => {
   try {
@@ -70,7 +66,6 @@ export const createSession = async (userId: string, device?: string, ip?: string
       body: JSON.stringify({ userId, device, ip }),
     });
     if (!res.ok) throw new Error("Failed to create session");
-
     return await res.json();
   } catch (err) {
     console.error("createSession error:", err);
@@ -80,10 +75,11 @@ export const createSession = async (userId: string, device?: string, ip?: string
 
 /**
  * patchSessionData
- * Incrementally updates session activity in backend.
- * Safely merges array fields and other session properties.
+ * Incrementally updates session activity
  */
-export const patchSessionData = async (updates: SessionUpdates) => {
+export const patchSessionData = async <T extends Prisma.UserInclude = typeof userFullBase>(
+  updates: SessionUpdates<T>
+) => {
   try {
     const res = await fetch(`/api/session`, {
       method: "PATCH",

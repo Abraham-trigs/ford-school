@@ -1,15 +1,10 @@
 // lib/store/sessionStore.ts
 import { create } from "zustand";
-import { fetchUserData, patchSessionData, SessionUpdates } from "@/lib/api/sessionApi";
 import { v4 as uuidv4 } from "uuid";
+import { fetchUserData, patchSessionData, SessionUpdates } from "@/lib/api/sessionApi";
 import { Prisma } from "@prisma/client";
-import {
-  userLightBase,
-  userFullBase,
-  getUserInclude,
-} from "@/lib/prisma/includes";
+import { userLightBase, userFullBase } from "@/lib/prisma/includes";
 
-// Type-safe User payloads
 type UserLight = Prisma.UserGetPayload<{ include: typeof userLightBase }>;
 type UserFull = Prisma.UserGetPayload<{ include: typeof userFullBase }>;
 
@@ -18,12 +13,15 @@ interface SessionStoreState {
   fullUserData: UserFull | null;
   pageData: Record<string, UserLight | UserFull>;
   pageSessionKeys: Record<string, string>;
+  sessionActivity: Partial<SessionUpdates>;
   sessionValid: (page: string) => boolean;
 
-  sessionActivity: Partial<SessionUpdates>;
-
   refreshSessionKey: () => void;
-  fetchPageData: (page: string, useFull?: boolean, pageIncludes?: any) => Promise<UserLight | UserFull>;
+  fetchPageData: (
+    page: string,
+    useFull?: boolean,
+    pageInclude?: Record<string, boolean>
+  ) => Promise<UserLight | UserFull>;
   updateSession: (activity: Partial<SessionUpdates>, reason?: string) => void;
   clearSession: () => void;
 }
@@ -32,6 +30,32 @@ const DEBOUNCE_MS = 2000;
 
 export const useSessionStore = create<SessionStoreState>((set, get) => {
   let debounceTimer: NodeJS.Timeout | null = null;
+
+  const mergeActivity = (existing: Partial<SessionUpdates>, incoming: Partial<SessionUpdates>) => {
+    const arrayFields: (keyof SessionUpdates)[] = [
+      "pagesVisited",
+      "clicks",
+      "keyboardInputs",
+      "bookmarks",
+      "externalPagesVisited",
+      "mouseMovements",
+      "scrollPositions",
+    ];
+
+    const merged: Partial<SessionUpdates> = { ...existing };
+
+    for (const key in incoming) {
+      const field = key as keyof SessionUpdates;
+      if (arrayFields.includes(field)) {
+        merged[field] = [...(existing[field] || []), ...(incoming[field] || [])];
+      } else if (typeof incoming[field] === "object" && incoming[field] !== null) {
+        merged[field] = { ...(existing[field] || {}), ...(incoming[field] as object) };
+      } else {
+        merged[field] = incoming[field];
+      }
+    }
+    return merged;
+  };
 
   return {
     sessionKey: null,
@@ -48,54 +72,54 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
 
     refreshSessionKey: () => {
       const newKey = uuidv4();
-      set({
+      set((state) => ({
         sessionKey: newKey,
-        pageSessionKeys: {},
+        pageSessionKeys: Object.keys(state.pageSessionKeys).reduce((acc, page) => {
+          acc[page] = newKey;
+          return acc;
+        }, {} as Record<string, string>),
         sessionActivity: {},
-      });
+      }));
     },
 
-fetchPageData: async (page, useFull = false, pageInclude?: Record<string, boolean>) => {
-  const { sessionKey, pageSessionKeys, fullUserData, pageData } = get();
-  if (!sessionKey) throw new Error("No session key found");
+    fetchPageData: async (page, useFull = false, pageInclude?: Record<string, boolean>) => {
+      const { sessionKey, pageSessionKeys, fullUserData, pageData } = get();
+      if (!sessionKey) throw new Error("No session key found");
 
-  if (get().sessionValid(page)) return pageData[page];
+      if (get().sessionValid(page)) return pageData[page];
 
-  let data;
-  if (useFull && !fullUserData) {
-    // First mount: fetch full user
-    data = await fetchUserData("", "full"); 
-    set({ fullUserData: data as UserFull });
-  } else {
-    // Only fetch includes needed for this page
-    data = await fetchUserData("", "light", pageInclude ?? userLightBase);
-  }
-
-  // Update current page cache
-  set((state) => ({
-    pageData: { ...state.pageData, [page]: data },
-    pageSessionKeys: { ...state.pageSessionKeys, [page]: state.sessionKey! },
-  }));
-
-  // Silent merge other pages
-  if (fullUserData && page !== "fullUser") {
-    const updatedPages: Record<string, UserLight | UserFull> = {};
-    Object.keys(pageData).forEach((p) => {
-      if (p !== page && pageSessionKeys[p] !== sessionKey) {
-        updatedPages[p] = { ...pageData[p], ...fullUserData };
+      let data;
+      if (useFull && !fullUserData) {
+        data = await fetchUserData("", "full");
+        set({ fullUserData: data as UserFull });
+      } else {
+        data = await fetchUserData("", "light", pageInclude ?? userLightBase);
       }
-    });
-    if (Object.keys(updatedPages).length > 0) {
-      set((state) => ({ pageData: { ...state.pageData, ...updatedPages } }));
-    }
-  }
 
-  return data;
-}
+      set((state) => ({
+        pageData: { ...state.pageData, [page]: data },
+        pageSessionKeys: { ...state.pageSessionKeys, [page]: state.sessionKey! },
+      }));
+
+      // Silent merge other pages if full data exists
+      if (fullUserData && page !== "fullUser") {
+        const updatedPages: Record<string, UserLight | UserFull> = {};
+        Object.keys(pageData).forEach((p) => {
+          if (p !== page && pageSessionKeys[p] !== sessionKey) {
+            updatedPages[p] = { ...pageData[p], ...fullUserData };
+          }
+        });
+        if (Object.keys(updatedPages).length > 0) {
+          set((state) => ({ pageData: { ...state.pageData, ...updatedPages } }));
+        }
+      }
+
+      return data;
+    },
 
     updateSession: (activity, reason = "activity update") => {
       set((state) => ({
-        sessionActivity: { ...state.sessionActivity, ...activity },
+        sessionActivity: mergeActivity(state.sessionActivity, activity),
       }));
 
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -112,13 +136,14 @@ fetchPageData: async (page, useFull = false, pageInclude?: Record<string, boolea
       }, DEBOUNCE_MS);
     },
 
-    clearSession: () =>
+    clearSession: () => {
       set({
         sessionKey: null,
         fullUserData: null,
         pageData: {},
         pageSessionKeys: {},
         sessionActivity: {},
-      }),
+      });
+    },
   };
 });

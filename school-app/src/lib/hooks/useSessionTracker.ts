@@ -1,6 +1,7 @@
 // lib/hooks/useSessionTracker.ts
 import { useEffect } from "react";
 import { useSessionStore } from "@/lib/store/sessionStore";
+import { getUserInclude } from "@/lib/prisma/includes";
 
 type SessionActivityOptions = {
   trackClicks?: boolean;
@@ -8,9 +9,9 @@ type SessionActivityOptions = {
   trackBookmarks?: boolean;
   trackMouse?: boolean;
   trackScroll?: boolean;
+  includeFields?: Partial<Record<keyof ReturnType<typeof getUserInclude>, boolean>>; // page-specific include
 };
 
-// Debounce utility
 const debounce = (fn: Function, delay: number) => {
   let timer: NodeJS.Timeout;
   return (...args: any[]) => {
@@ -19,108 +20,119 @@ const debounce = (fn: Function, delay: number) => {
   };
 };
 
-/**
- * Hook: useSessionTracker
- * Tracks selective browser/app activity and updates session store
- */
 export const useSessionTracker = (options: SessionActivityOptions = {}) => {
-  const { sessionKey, userId, updateSession } = useSessionStore.getState();
+  const { sessionKey, userId, sessionActivity, updateSession, fullUserData } = useSessionStore.getState();
 
   useEffect(() => {
     if (!userId || !sessionKey) return;
 
     const page = window.location.pathname;
 
-    // Track page visit
-    updateSession({
-      pagesVisited: [{ page, timestamp: new Date().toISOString() }],
-    });
+    // -------------------
+    // Batched activity
+    // -------------------
+    const activityBatch: Record<string, any> = {};
+
+    const flushBatch = () => {
+      if (Object.keys(activityBatch).length === 0) return;
+
+      const mergedActivity: Record<string, any> = { ...sessionActivity };
+
+      for (const key in activityBatch) {
+        if (Array.isArray(activityBatch[key])) {
+          mergedActivity[key] = [...(mergedActivity[key] || []), ...activityBatch[key]];
+        } else if (typeof activityBatch[key] === "object") {
+          mergedActivity[key] = { ...(mergedActivity[key] || {}), ...activityBatch[key] };
+        } else {
+          mergedActivity[key] = activityBatch[key];
+        }
+      }
+
+      updateSession(mergedActivity);
+      for (const key in activityBatch) delete activityBatch[key];
+    };
+
+    const debouncedFlush = debounce(flushBatch, 2000);
 
     // -------------------
-    // Event handlers
+    // Track activity
     // -------------------
+    activityBatch.pagesVisited = [
+      ...(activityBatch.pagesVisited || []),
+      { page, timestamp: new Date().toISOString() },
+    ];
+
+    if (options.includeFields && fullUserData) {
+      const partialData: Record<string, any> = {};
+      for (const key in options.includeFields) {
+        if (options.includeFields[key]) partialData[key] = fullUserData[key];
+      }
+      activityBatch.userPartial = partialData; // merge partial page-specific user data
+    }
+
     const handleClick = (e: MouseEvent) => {
       if (!options.trackClicks) return;
-
       const el = e.target as HTMLElement;
-      updateSession({
-        clicks: [
-          {
-            elementId: el?.id || undefined,
-            page,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      });
+      activityBatch.clicks = [
+        ...(activityBatch.clicks || []),
+        { elementId: el?.id || undefined, page, timestamp: new Date().toISOString() },
+      ];
+      debouncedFlush();
     };
 
     const handleKey = (e: KeyboardEvent) => {
       if (!options.trackKeyboard) return;
-
       const active = document.activeElement as HTMLInputElement | null;
       if (active && active.tagName === "INPUT") {
-        updateSession({
-          keyboardInputs: [
-            {
-              page,
-              input: active.value,
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        });
+        activityBatch.keyboardInputs = [
+          ...(activityBatch.keyboardInputs || []),
+          { page, input: active.value, timestamp: new Date().toISOString() },
+        ];
+        debouncedFlush();
       }
     };
 
     const handleScroll = () => {
       if (!options.trackScroll) return;
-      updateSession({
-        scrollPositions: [
-          {
-            page,
-            position: window.scrollY,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      });
+      activityBatch.scrollPositions = [
+        ...(activityBatch.scrollPositions || []),
+        { page, position: window.scrollY, timestamp: new Date().toISOString() },
+      ];
+      debouncedFlush();
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!options.trackMouse) return;
-      updateSession({
-        mouseMovements: [
-          { x: e.clientX, y: e.clientY, timestamp: new Date().toISOString() },
-        ],
-      });
+      activityBatch.mouseMovements = [
+        ...(activityBatch.mouseMovements || []),
+        { x: e.clientX, y: e.clientY, timestamp: new Date().toISOString() },
+      ];
+      debouncedFlush();
     };
 
     // -------------------
-    // Debounced listeners
+    // Snapshot storage/cookies once
     // -------------------
-    const debouncedClick = debounce(handleClick, 500);
-    const debouncedKey = debounce(handleKey, 500);
-    const debouncedScroll = debounce(handleScroll, 500);
-    const debouncedMouse = debounce(handleMouseMove, 500);
+    activityBatch.localStorageData = { ...localStorage };
+    activityBatch.sessionStorageData = { ...sessionStorage };
+    activityBatch.cookiesData = Object.fromEntries(document.cookie.split("; ").map((c) => c.split("=")));
 
-    window.addEventListener("click", debouncedClick);
-    window.addEventListener("keyup", debouncedKey);
-    window.addEventListener("scroll", debouncedScroll);
-    window.addEventListener("mousemove", debouncedMouse);
+    debouncedFlush();
 
-    // Optional: snapshot localStorage/sessionStorage/cookies
-    updateSession({
-      localStorageData: { ...localStorage },
-      sessionStorageData: { ...sessionStorage },
-      cookiesData: Object.fromEntries(
-        document.cookie.split("; ").map((c) => c.split("="))
-      ),
-    });
+    // -------------------
+    // Attach event listeners
+    // -------------------
+    window.addEventListener("click", handleClick);
+    window.addEventListener("keyup", handleKey);
+    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("mousemove", handleMouseMove);
 
-    // Cleanup on unmount
     return () => {
-      window.removeEventListener("click", debouncedClick);
-      window.removeEventListener("keyup", debouncedKey);
-      window.removeEventListener("scroll", debouncedScroll);
-      window.removeEventListener("mousemove", debouncedMouse);
+      window.removeEventListener("click", handleClick);
+      window.removeEventListener("keyup", handleKey);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("mousemove", handleMouseMove);
+      flushBatch();
     };
-  }, [sessionKey, userId, options]);
+  }, [sessionKey, userId, options, sessionActivity, updateSession, fullUserData]);
 };
