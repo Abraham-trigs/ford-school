@@ -32,7 +32,6 @@ export default function LoginPage() {
       return;
     }
 
-    // Dynamically compute dashboard route
     const roleLower = role.toLowerCase();
     const defaultDashboard = `/${roleLower}/dashboard`;
     router.replace(defaultDashboard);
@@ -41,10 +40,17 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setError("");
 
+    if (!email || !password) {
+      setError("Please provide both email and password.");
+      return;
+    }
+
     try {
       await login(email, password);
+
       const { loggedIn: newLoggedIn, user: newUser } =
         useSessionStore.getState();
+
       if (newLoggedIn && newUser) redirectAfterLogin(newUser.role);
     } catch (err: unknown) {
       setError(
@@ -66,7 +72,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-back">
       <motion.div
-        className="w-full max-w-md p-8 bg-white rounded-lg shadow-md"
+        className="w-full max-w-md p-8 bg-light rounded-lg shadow-md"
         initial={{ opacity: 0, y: -30 }}
         animate={{
           opacity: 1,
@@ -99,7 +105,7 @@ export default function LoginPage() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-wine"
+            className="w-full px-4 py-2 border border-wine rounded focus:outline-none focus:ring-2 focus:ring-wine"
             variants={itemVariants}
           />
 
@@ -109,12 +115,12 @@ export default function LoginPage() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-wine"
+              className="w-full px-4 py-2 border border-wine rounded focus:outline-none focus:ring-2 focus:ring-wine"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-wine transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-wine hover:text-light transition-colors"
             >
               {showPassword ? <HiEyeOff size={20} /> : <HiEye size={20} />}
             </button>

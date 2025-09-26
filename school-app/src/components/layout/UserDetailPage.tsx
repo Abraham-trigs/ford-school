@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useUsersStore } from "@/lib/store/UserStore";
 import { useSessionStore } from "@/lib/store/sessionStore";
 import type { User } from "@/types/school";
-import { Role } from "@/types/school"; // <-- Add this import
+import { Role } from "@/types/school";
 
 interface UserDetailPageProps {
   userId: string;

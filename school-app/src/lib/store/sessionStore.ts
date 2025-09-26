@@ -1,7 +1,7 @@
 // lib/store/sessionStore.ts
 import { create } from "zustand";
 import { v4 as uuidv4 } from "uuid";
-import { fetchUserData, patchSessionData, SessionUpdates } from "@/lib/api/sessionApi";
+import { fetchUserData, patchSessionData, SessionUpdates } from "@/lib/api/sessesionApi";
 import { Prisma } from "@prisma/client";
 import { userLightBase, userFullBase } from "@/lib/prisma/includes";
 
