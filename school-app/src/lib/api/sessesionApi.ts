@@ -1,7 +1,6 @@
 // lib/api/sessionApi.ts
-import { fetch } from "next/dist/compiled/@edge-runtime/primitives/fetch";
 import { Prisma } from "@prisma/client";
-import {  userFullBase,  } from "@/lib/prisma/includes";
+import { userFullBase } from "@/lib/prisma/includes";
 
 // Type-safe session updates
 export type SessionUpdates<T extends Prisma.UserInclude = typeof userFullBase> = Partial<{
@@ -65,6 +64,7 @@ export const createSession = async (userId: string, device?: string, ip?: string
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, device, ip }),
     });
+
     if (!res.ok) throw new Error("Failed to create session");
     return await res.json();
   } catch (err) {
@@ -86,6 +86,7 @@ export const patchSessionData = async <T extends Prisma.UserInclude = typeof use
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
     });
+
     if (!res.ok) throw new Error("Failed to patch session data");
 
     const data = await res.json();

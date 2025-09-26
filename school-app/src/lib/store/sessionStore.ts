@@ -14,8 +14,9 @@ interface SessionStoreState {
   pageData: Record<string, UserLight | UserFull>;
   pageSessionKeys: Record<string, string>;
   sessionActivity: Partial<SessionUpdates>;
-  sessionValid: (page: string) => boolean;
+  roleCounts: Record<string, number>;
 
+  sessionValid: (page: string) => boolean;
   refreshSessionKey: () => void;
   fetchPageData: (
     page: string,
@@ -24,6 +25,7 @@ interface SessionStoreState {
   ) => Promise<UserLight | UserFull>;
   updateSession: (activity: Partial<SessionUpdates>, reason?: string) => void;
   clearSession: () => void;
+  updateRoleCounts: () => void;
 }
 
 const DEBOUNCE_MS = 2000;
@@ -57,12 +59,24 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
     return merged;
   };
 
+  const computeRoleCounts = (user: UserFull | null) => {
+    const counts: Record<string, number> = {};
+    if (!user) return counts;
+
+    Object.entries(user).forEach(([key, value]) => {
+      if (Array.isArray(value)) counts[key] = value.length;
+    });
+
+    return counts;
+  };
+
   return {
     sessionKey: null,
     fullUserData: null,
     pageData: {},
     pageSessionKeys: {},
     sessionActivity: {},
+    roleCounts: {},
 
     sessionValid: (page) => {
       const currentKey = get().sessionKey;
@@ -92,8 +106,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
       if (useFull && !fullUserData) {
         data = await fetchUserData("", "full");
         set({ fullUserData: data as UserFull });
+        set({ roleCounts: computeRoleCounts(data as UserFull) });
       } else {
         data = await fetchUserData("", "light", pageInclude ?? userLightBase);
+        // If full data exists, update role counts anyway
+        if (fullUserData) set({ roleCounts: computeRoleCounts(fullUserData) });
       }
 
       set((state) => ({
@@ -143,7 +160,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
         pageData: {},
         pageSessionKeys: {},
         sessionActivity: {},
+        roleCounts: {},
       });
+    },
+
+    updateRoleCounts: () => {
+      const { fullUserData } = get();
+      set({ roleCounts: computeRoleCounts(fullUserData) });
     },
   };
 });

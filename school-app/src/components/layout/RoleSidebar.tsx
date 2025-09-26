@@ -9,7 +9,6 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
 import { useSidebarStore } from "@/lib/store/SidebarStore";
-import { useUsersStore } from "@/lib/store/UserStore";
 import { useSessionStore } from "@/lib/store/sessionStore";
 import { getMenuForRole } from "@/lib/menus";
 
@@ -29,22 +28,25 @@ export default function RoleSidebar({
 
   const { collapsedSections, search, toggleSection, setSearch } =
     useSidebarStore();
-
   const roleCollapsedSections = collapsedSections[role] || {};
   const roleSearch = search[role] || "";
 
   const menu = getMenuForRole(role);
 
-  // --- derive badge counts from UsersStore ---
-  const { staff, students, parents, totalUsers } = useUsersStore();
-  const badgeCounts: Record<string, number> = {
-    staff: staff.length,
-    students: students.length,
-    parents: parents.length,
-    users: totalUsers,
+  // --- dynamic badge counts from session store ---
+  const { roleCounts, fullUserData } = useSessionStore();
+  const renderBadge = (badgeKey?: string) => {
+    if (!badgeKey) return null;
+    const count = roleCounts[badgeKey] ?? 0;
+    if (!count) return null;
+    return (
+      <span className="bg-light text-wine px-2 py-0.5 rounded-full text-xs font-semibold">
+        {count}
+      </span>
+    );
   };
 
-  // --- get first name from session ---
+  // --- first name greeting ---
   const { user } = useSessionStore();
   const firstName = user?.name?.split(" ")[0]?.trim() ?? "User";
 
@@ -64,7 +66,6 @@ export default function RoleSidebar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [mobileOpen, setMobileOpen]);
 
-  // --- memoize filtered menu to prevent re-renders ---
   const filteredMenu = useMemo(() => {
     return menu.map((item) => {
       if (item.children) {
@@ -79,17 +80,6 @@ export default function RoleSidebar({
 
   const getActiveKey = (href: string) => pathname?.startsWith(href);
 
-  const renderBadge = (badgeKey?: string) => {
-    if (!badgeKey) return null;
-    const count = badgeCounts[badgeKey];
-    if (!count) return null;
-    return (
-      <span className="bg-light text-wine px-2 py-0.5 rounded-full text-xs font-semibold">
-        {count}
-      </span>
-    );
-  };
-
   return (
     <>
       <aside
@@ -98,12 +88,10 @@ export default function RoleSidebar({
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"} 
           md:translate-x-0 md:top-16 md:h-[calc(100%-4rem)]`}
       >
-        {/* Top user greeting */}
         <div className="p-4 text-xl text-back font-display border-b border-light hidden md:block">
           Hi, {firstName}
         </div>
 
-        {/* Search input */}
         <div className="p-4 border-b border-light flex items-center gap-2">
           <MagnifyingGlassIcon className="w-5 h-5 text-switch" />
           <input
@@ -115,7 +103,6 @@ export default function RoleSidebar({
           />
         </div>
 
-        {/* Menu items */}
         <nav className="flex-1 overflow-y-auto mt-2">
           {filteredMenu.map((item) => (
             <div key={item.key} className="mb-1">
@@ -173,7 +160,6 @@ export default function RoleSidebar({
         </nav>
       </aside>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black opacity-30 z-40 mt-16 md:hidden"
