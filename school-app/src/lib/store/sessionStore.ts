@@ -1,158 +1,126 @@
-"use client";
-
+// lib/store/sessionStore.ts
 import { create } from "zustand";
-import type { Role, User } from "@/types/school";
-import { useUsersStore } from "@/lib/store/UserStore";
+import { fetchUserData, patchSessionData } from "@/lib/api/sessionApi";
+import { v4 as uuidv4 } from "uuid";
 
-export interface UserSession extends User {
-  role: Role;
+interface SessionStoreState {
+  userId: string | null;
+  sessionKey: string | null;
+  pageData: Record<string, any>;
+  pageSessionKeys: Record<string, string>;
+  sessionValid: (page: string) => boolean;
+
+  // activity tracking
+  sessionActivity: Record<string, any>;
+
+  // setters
+  setUserId: (id: string) => void;
+  refreshSessionKey: () => void;
+  fetchPageData: (page: string, useFull?: boolean) => Promise<any>;
+  updateSession: (activity: Partial<Record<string, any>>, reason?: string) => void;
+  clearSession: () => void;
 }
 
-interface SessionResponse {
-  loggedIn: boolean;
-  user: UserSession | null;
-}
+const DEBOUNCE_MS = 2000;
 
-interface SessionStore {
-  user: UserSession | null;
-  loggedIn: boolean;
-  loading: boolean;
-  role: Role | null;
-  firstName: string;
-  isSuperAdmin: boolean;
+export const useSessionStore = create<SessionStoreState>((set, get) => {
+  let debounceTimer: NodeJS.Timeout | null = null;
 
-  fetchSession: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
+  return {
+    userId: null,
+    sessionKey: null,
+    pageData: {},
+    pageSessionKeys: {},
+    sessionActivity: {},
 
-  setUser: (user: UserSession | null) => void;
-  setRole: (role: Role) => void;
-  clearRole: () => void;
-}
+    sessionValid: (page) => {
+      const currentKey = get().sessionKey;
+      const pageKey = get().pageSessionKeys[page];
+      return currentKey && pageKey === currentKey;
+    },
 
-export const useSessionStore = create<SessionStore>((set, get) => ({
-  user: null,
-  loggedIn: false,
-  loading: false,
-  role: null,
-  firstName: "User",
-  isSuperAdmin: false,
+    setUserId: (id) => {
+      const newKey = uuidv4();
+      set({
+        userId: id,
+        sessionKey: newKey,
+        pageData: {},
+        pageSessionKeys: {},
+        sessionActivity: {},
+      });
+    },
 
-  fetchSession: async () => {
-    set({ loading: true });
-    try {
-      const res = await fetch("/api/auth/session");
-      const data: SessionResponse = await res.json();
+    refreshSessionKey: () => {
+      const newKey = uuidv4();
+      set((state) => ({
+        sessionKey: newKey,
+        pageSessionKeys: {},
+        sessionActivity: {},
+      }));
+    },
 
-      if (data.loggedIn && data.user) {
-        const usersStore = useUsersStore.getState();
+    fetchPageData: async (page, useFull = false) => {
+      const { userId, sessionKey, pageSessionKeys, pageData } = get();
+      if (!userId) throw new Error("No userId found in session");
 
-        // Ensure UsersStore is populated
-        if (!usersStore.hasFetchedUsers) {
-          await usersStore.fetchUsersIfAllowed();
-          usersStore.setHasFetchedUsers(true);
+      if (get().sessionValid(page)) return pageData[page];
+
+      const data = await fetchUserData(userId, useFull ? "full" : "light");
+
+      set((state) => ({
+        pageData: { ...state.pageData, [page]: data },
+        pageSessionKeys: { ...state.pageSessionKeys, [page]: sessionKey },
+      }));
+
+      return data;
+    },
+
+    /**
+     * updateSession
+     * Merge front-end activity with existing state and sync with backend.
+     * @param activity Partial session activity to merge
+     * @param reason Optional reason for the update (e.g., 'manual refresh', 'form entry')
+     */
+    updateSession: (activity, reason = "activity update") => {
+      // Merge new activity into existing sessionActivity
+      set((state) => ({
+        sessionActivity: {
+          ...state.sessionActivity,
+          ...Object.keys(activity).reduce((acc, key) => {
+            // For arrays, append instead of replacing
+            if (Array.isArray(activity[key])) {
+              acc[key] = [...(state.sessionActivity[key] || []), ...activity[key]];
+            } else {
+              acc[key] = activity[key];
+            }
+            return acc;
+          }, {} as Record<string, any>),
+        },
+      }));
+
+      // Debounced backend sync
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const { sessionActivity, sessionKey } = get();
+        if (!sessionKey || Object.keys(sessionActivity).length === 0) return;
+
+        try {
+          await patchSessionData({ ...sessionActivity, updateReason: reason }); // call PATCH API
+          // Clear local sessionActivity after successful sync
+          set({ sessionActivity: {} });
+        } catch (err) {
+          console.error("Failed to sync session activity:", err);
         }
+      }, DEBOUNCE_MS);
+    },
 
-        // Pull full user info from UsersStore if available
-        const fullUser = usersStore.userMap[data.user.id] ?? data.user;
-        const firstName = fullUser.name?.split(" ")[0]?.trim() ?? "User";
-
-        set({
-          user: fullUser,
-          loggedIn: true,
-          role: fullUser.role,
-          firstName,
-          isSuperAdmin: fullUser.role === "SUPERADMIN",
-        });
-      } else {
-        set({
-          user: null,
-          loggedIn: false,
-          role: null,
-          firstName: "User",
-          isSuperAdmin: false,
-        });
-      }
-    } catch (err) {
-      console.error("fetchSession error:", err);
+    clearSession: () =>
       set({
-        user: null,
-        loggedIn: false,
-        role: null,
-        firstName: "User",
-        isSuperAdmin: false,
-      });
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  login: async (email, password) => {
-    set({ loading: true });
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        await get().fetchSession();
-      } else {
-        throw new Error(data.message || "Login failed");
-      }
-    } catch (err) {
-      console.error("login error:", err);
-      set({
-        user: null,
-        loggedIn: false,
-        role: null,
-        firstName: "User",
-        isSuperAdmin: false,
-      });
-      throw err;
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  logout: async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (err) {
-      console.error("logout error:", err);
-    } finally {
-      set({
-        user: null,
-        loggedIn: false,
-        loading: false,
-        role: null,
-        firstName: "User",
-        isSuperAdmin: false,
-      });
-    }
-  },
-
-  setUser: (user) =>
-    set({
-      user,
-      loggedIn: !!user,
-      role: user?.role ?? null,
-      firstName: user?.name?.split(" ")[0]?.trim() ?? "User",
-      isSuperAdmin: user?.role === "SUPERADMIN",
-    }),
-
-  setRole: (role) =>
-    set({
-      role,
-      isSuperAdmin: role === "SUPERADMIN",
-    }),
-
-  clearRole: () =>
-    set({
-      role: null,
-      isSuperAdmin: false,
-    }),
-}));
+        userId: null,
+        sessionKey: null,
+        pageData: {},
+        pageSessionKeys: {},
+        sessionActivity: {},
+      }),
+  };
+});

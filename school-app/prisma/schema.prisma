@@ -25,7 +25,7 @@ enum PaymentType {
   DAILY
   WEEKLY
   MONTHLY
-  TERMLY
+  TERM
   YEARLY
   ONE_TIME
 }
@@ -135,7 +135,59 @@ enum DisciplineType {
   NOTE
 }
 
-// ------------------ MODELS ------------------
+enum ClassActivityType {
+  CLASSWORK
+  HOMEWORK
+  EXTRA_CLASS
+  EXAM
+}
+
+// ------------------ CORE MODELS ------------------
+
+model SessionData {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String
+
+  // Session management
+  sessionKey     String   @unique
+  device         String?  // device/browser info, e.g., "Chrome MacOS"
+  ip             String?  // optional IP tracking
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime // optional expiration
+
+  // In-App activity
+  pagesVisited   Json?    // array of app pages visited [{page: "/dashboard", timestamp: "..."}]
+  clicks         Json?    // array of clicks [{elementId: "btnSubmit", timestamp: "..."}]
+  keyboardInputs Json?    // per page inputs [{page: "/form", input: "abc", timestamp: "..."}]
+  bookmarks      Json?    // bookmarks saved inside the app [{page: "/lesson/1", title: "..."}]
+
+  // Browser-level activity (consent required)
+  externalPagesVisited Json? // tracks external pages visited [{url: "...", timestamp: "..."}]
+  localStorageData    Json? // snapshot of localStorage (non-sensitive)
+  sessionStorageData  Json? // snapshot of sessionStorage (non-sensitive)
+  cookiesData         Json? // non-sensitive cookies
+
+  // Optional analytics
+  mouseMovements      Json? // mouse movements captured inside app
+  scrollPositions     Json? // per page scroll positions
+  activeTime          Int?  // total active time in seconds
+
+  // Relations
+  userSessionUpdates  SessionUpdate[] // logs updates or refreshes per session
+
+  @@index([userId])
+  @@index([sessionKey])
+}
+
+model SessionUpdate {
+  id            String      @id @default(cuid())
+  session       SessionData @relation(fields: [sessionId], references: [id])
+  sessionId     String
+  updatedAt     DateTime    @default(now())
+  updateReason  String      // e.g., "manual refresh", "auto-refresh", "permission change"
+}
+
 
 // Dynamic User Statuses
 model UserStatus {
@@ -146,26 +198,30 @@ model UserStatus {
   users     User[]
 }
 
+
 // Dynamic Roles
 model RoleModel {
   id          String       @id @default(cuid())
   name        String       @unique
   createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @default(now()) @updatedAt
+  updatedAt   DateTime     @updatedAt
 
   // Self-relation Many-to-Many
   relatedRoles RoleModel[] @relation("RoleRelations")
   relatedBy    RoleModel[] @relation("RoleRelations")
 
   users       User[]
+  permissions RolePermission[]
 }
 
+// User
 model User {
   id           String    @id @default(cuid())
   name         String
   email        String?   @unique
   phone        String?
   password     String
+  sessions     SessionData[] // back-relation for SessionData
 
   roleId       String
   role         RoleModel @relation(fields: [roleId], references: [id])
@@ -199,24 +255,23 @@ model User {
   visitedVisitorLogs  VisitorLog[] @relation("VisitorVisited")
   approvedVisitorLogs VisitorLog[] @relation("VisitorApproved")
 
-  subjectAssignments      SubjectAssignment[]
+  classActivities ClassActivity[] @relation("ClassActivityTeacher")
+
   attendanceSessionsTaken AttendanceSession[] @relation("AttendanceTeacher")
   promotionsDecided       Promotion[] @relation("PromotionDecider")
   schoolExpensesPaid      SchoolExpense[] @relation("ExpensePaidBy")
   schoolIncomesRecorded   SchoolIncome[] @relation("IncomeRecordedBy")
   departments             Department[] @relation("DepartmentOwner")
   sectionsTaught          Section[] @relation("SectionTeacher")
+  timetables              Timetable[] @relation("TimetableTeacher")
 
-  timetables        Timetable[] @relation("TimetableTeacher")
-
-  performedAssetLogs AssetLog[] @relation("PerformedAssetLogs")
-  classworks        Classwork[] @relation("ClassworkTeacher")
+  performedAssetLogs AssetLog[]
 
   @@index([roleId])
   @@index([statusId])
 }
 
-// ------------------ Core School Models ------------------
+// ------------------ STAFF/STUDENT ------------------
 
 model Staff {
   id        String   @id @default(cuid())
@@ -239,11 +294,13 @@ model Student {
   parents   User[]   @relation("UserParents")
   parentOf  User[]   @relation("UserParentOf")
   promotions Promotion[]
-  classworks Classwork[]
+  classActivities ClassActivity[]
 
   @@unique([rollNo, sectionId])
   @@index([sectionId])
 }
+
+// ------------------ SECTION ------------------
 
 model Section {
   id        String    @id @default(cuid())
@@ -260,6 +317,8 @@ model Section {
   @@index([teacherId])
   @@index([departmentId])
 }
+
+// ------------------ ATTENDANCE ------------------
 
 model AttendanceRecord {
   id        String    @id @default(cuid())
@@ -289,7 +348,7 @@ model AttendanceSession {
   @@index([type])
 }
 
-// ------------------ Academic Models ------------------
+// ------------------ ACADEMIC MODELS ------------------
 
 model Subject {
   id          String   @id @default(cuid())
@@ -299,68 +358,58 @@ model Subject {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  assignments SubjectAssignment[]
-  classworks  Classwork[]
-  timetables  Timetable[]
+  classActivities ClassActivity[]
+  timetables       Timetable[]
 }
 
-model AssessmentType {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  classworks Classwork[]
+model Exam {
+  id         String @id @default(cuid())
+  title      String
+  sectionId  String
+  section    Section @relation(fields: [sectionId], references: [id])
+  startDate  DateTime
+  endDate    DateTime
+  examType   ExamType
+
+  classActivities ClassActivity[] @relation("ExamActivities")
+
+  @@index([sectionId])
+  @@index([examType])
 }
 
-model Classwork {
+// ------------------ CLASS ACTIVITIES ------------------
+
+model ClassActivity {
   id        String   @id @default(cuid())
   studentId String
   student   Student  @relation(fields: [studentId], references: [id])
-  teacherId String
-  teacher   User     @relation("ClassworkTeacher", fields: [teacherId], references: [id])
+
   subjectId String
   subject   Subject  @relation(fields: [subjectId], references: [id])
-  typeId    String
-  type      AssessmentType @relation(fields: [typeId], references: [id])
+
+  teacherId String
+  teacher   User     @relation("ClassActivityTeacher", fields: [teacherId], references: [id])
+
+  type      ClassActivityType
+  examId    String?  // optional link to an Exam if type === EXAM
+  exam      Exam?    @relation("ExamActivities", fields: [examId], references: [id])
+
   score     Float?
   remarks   String?
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([studentId, subjectId, type, createdAt]) 
   @@index([studentId])
-  @@index([teacherId])
-  @@index([subjectId])
-  @@index([typeId])
-}
-
-model Timetable {
-  id        String   @id @default(cuid())
-  sectionId String
-  section   Section  @relation(fields: [sectionId], references: [id])
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  teacherId String
-  teacher   User     @relation("TimetableTeacher", fields: [teacherId], references: [id])
-  dayOfWeek Int      // 0 = Sunday, 1 = Monday, etc.
-  startTime DateTime
-  endTime   DateTime
-
-  @@index([sectionId])
   @@index([subjectId])
   @@index([teacherId])
+  @@index([type])
+  @@index([examId])
 }
 
-model SubjectAssignment {
-  id        String @id @default(cuid())
-  teacherId String
-  teacher   User @relation(fields: [teacherId], references: [id])
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id])
 
-  @@index([teacherId])
-  @@index([subjectId])
-}
-
-// ------------------ Finance Models ------------------
+// ------------------ FINANCE MODELS ------------------
 
 model Payment {
   id          String      @id @default(cuid())
@@ -448,7 +497,7 @@ model SchoolIncome {
   @@index([recordedById])
 }
 
-// ------------------ School Operations ------------------
+// ------------------ SCHOOL OPERATIONS ------------------
 
 model Department {
   id        String @id @default(cuid())
@@ -473,13 +522,13 @@ model Asset {
 }
 
 model AssetLog {
-  id         String @id @default(cuid())
-  assetId    String
-  action     AssetAction
-  notes      String?
+  id           String @id @default(cuid())
+  assetId      String
+  action       AssetAction
+  notes        String?
   performedById String
-  performedBy  User @relation("PerformedAssetLogs", fields: [performedById], references: [id])
-  createdAt  DateTime @default(now())
+  performedBy  User @relation(fields: [performedById], references: [id])
+  createdAt    DateTime @default(now())
 
   @@index([assetId])
   @@index([performedById])
@@ -524,6 +573,24 @@ model SchoolEvent {
   @@index([eventType])
 }
 
+model Timetable {
+  id        String   @id @default(cuid())
+  sectionId String
+  section   Section  @relation(fields: [sectionId], references: [id])
+  teacherId String
+  teacher   User     @relation("TimetableTeacher", fields: [teacherId], references: [id])
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  startTime DateTime
+  endTime   DateTime
+  day       String
+
+  @@index([sectionId])
+  @@index([teacherId])
+  @@index([subjectId])
+}
+
+
 model LibraryLog {
   id        String @id @default(cuid())
   bookId    String
@@ -566,27 +633,14 @@ model DisciplineLog {
 }
 
 model Announcement {
-  id        String @id @default(cuid())
-  content   String
+  id          String @id @default(cuid())
+  content     String
   createdById String
-  createdBy User @relation(fields: [createdById], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdBy   User @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([createdById])
-}
-
-model Exam {
-  id         String @id @default(cuid())
-  title      String
-  sectionId  String
-  section    Section @relation(fields: [sectionId], references: [id])
-  startDate  DateTime
-  endDate    DateTime
-  examType   ExamType
-
-  @@index([sectionId])
-  @@index([examType])
 }
 
 model Promotion {
@@ -602,3 +656,47 @@ model Promotion {
   @@index([decidedById])
   @@index([decision])
 }
+
+// ------------------ ROLE-BASED ACCESS CONTROL ------------------
+
+model RolePermission {
+  id        String      @id @default(cuid())
+  roleId    String
+  role      RoleModel   @relation(fields: [roleId], references: [id])
+
+  actions   String[]    // ["read", "create", "update", "delete"]
+  resources RolePermissionResource[] @relation("PermissionResources")
+  
+  // Optional group-based access to reduce per-record entries
+  groupType String?     // e.g., "SECTION", "DEPARTMENT", "GLOBAL"
+  groupId   String?     // ID of section/department if applicable
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([groupType, groupId])
+}
+
+model RolePermissionResource {
+  id           String @id @default(cuid())
+  permissionId String
+  permission   RolePermission @relation("PermissionResources", fields: [permissionId], references: [id])
+  resourceName String           // e.g., "Student", "Invoice", "ClassActivity"
+
+  // Only store exceptions here; otherwise, use groupType/groupId in RolePermission
+  allowedRecords RolePermissionRecord[] @relation("ResourceAllowedRecords")
+
+  @@index([permissionId])
+  @@index([resourceName])
+}
+
+model RolePermissionRecord {
+  id         String @id @default(cuid())
+  resourceId String
+  resource   RolePermissionResource @relation("ResourceAllowedRecords", fields: [resourceId], references: [id])
+  recordId   String // actual ID of the record (e.g., Student.id, Invoice.id)
+
+  @@index([resourceId, recordId])
+}
+

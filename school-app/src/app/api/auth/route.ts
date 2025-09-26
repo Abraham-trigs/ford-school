@@ -1,0 +1,85 @@
+import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+import { signJWT, setJWTCookie } from "@/lib/auth";
+import { getUserInclude } from "@/lib/prisma/includes";
+import { v4 as uuidv4 } from "uuid";
+import { verifySession } from "@/lib/auth/session";
+
+// ----------------------------
+// POST /api/auth -> login
+// ----------------------------
+export async function POST(req: NextRequest) {
+  try {
+    const { email, password } = await req.json();
+    if (!email || !password)
+      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+
+    // Generate sessionKey
+    const sessionKey = uuidv4();
+
+    // Store session in DB
+    await prisma.sessionData.create({
+      data: {
+        userId: user.id,
+        sessionKey,
+        device: req.headers.get("user-agent") ?? undefined,
+        ip: req.ip ?? undefined,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24h expiration
+      },
+    });
+
+    // Sign JWT with sessionKey
+    const token = signJWT({ userId: user.id, sessionKey });
+
+    const res = NextResponse.json({
+      message: "Logged in successfully",
+      userId: user.id,
+      sessionKey,
+    });
+
+    setJWTCookie(res, token);
+    return res;
+  } catch (err) {
+    console.error("Login error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// ----------------------------
+// DELETE /api/auth -> logout
+// ----------------------------
+export async function DELETE(req: NextRequest) {
+  const verified = await verifySession(req);
+  if (verified) {
+    await prisma.sessionData.updateMany({
+      where: { userId: verified.userId, sessionKey: verified.sessionKey },
+      data: { expiresAt: new Date() },
+    });
+  }
+
+  const res = NextResponse.json({ message: "Logged out successfully" });
+  res.cookies.set("token", "", { maxAge: -1, path: "/" });
+  return res;
+}
+
+// ----------------------------
+// GET /api/auth -> fetch session/user
+// ----------------------------
+export async function GET(req: NextRequest) {
+  const verified = await verifySession(req);
+  if (!verified) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  return NextResponse.json({
+    user: verified.user,
+    sessionKey: verified.session.sessionKey,
+    sessionData: verified.session,
+  });
+}

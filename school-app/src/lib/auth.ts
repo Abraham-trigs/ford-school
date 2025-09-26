@@ -1,6 +1,6 @@
 // src/lib/auth.ts
 import jwt from "jsonwebtoken";
-import { prisma } from "./prisma";
+import { prisma } from "./prisma/prisma";
 
 export type JwtPayloadShape = {
   sub: string; // user id
