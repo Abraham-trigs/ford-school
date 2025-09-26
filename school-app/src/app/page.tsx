@@ -1,33 +1,31 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/lib/store/sessionStore";
 import NavigateToLoginButton from "@/components/NavigateToLoginButton";
 
 export default function Home() {
-  const { fetchSession, loggedIn, user } = useSessionStore();
+  const router = useRouter();
+  const { fullUserData: user } = useSessionStore();
 
-  // rehydrate session on entry
   useEffect(() => {
-    fetchSession();
-  }, [fetchSession]);
+    if (user?.role?.name) {
+      // Redirect to dashboard based on role
+      router.replace(`/dashboard/${user.role.name.toLowerCase()}`);
+    }
+  }, [user, router]);
 
   return (
-    <>
+    <div className="p-8">
       <h1 className="text-wine font-display text-4xl">Welcome</h1>
-      <p className="text-light font-sans">This is the homepage</p>
+      <p className="text-light font-sans mt-2">This is the homepage</p>
 
-      <button className="bg-wine text-switch px-4 py-2 rounded">
+      <button className="bg-wine text-switch px-4 py-2 rounded mt-4">
         Get Started
       </button>
 
-      {loggedIn ? (
-        <p className="mt-4 text-green-500">
-          Logged in as <strong>{user?.name || user?.email}</strong>
-        </p>
-      ) : (
-        <NavigateToLoginButton />
-      )}
-    </>
+      {!user && <NavigateToLoginButton />}
+    </div>
   );
 }
