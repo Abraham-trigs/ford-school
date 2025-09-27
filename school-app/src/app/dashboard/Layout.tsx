@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useSessionStore } from "@/lib/store/sessionStore";
 import RoleNavbar from "@/components/layout/RoleNavbar";
 
@@ -11,28 +11,44 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
-  const { fullUserData: user } = useSessionStore();
+  const pathname = usePathname();
+  const { fullUserData: user, fetchPageData } = useSessionStore();
   const [loading, setLoading] = useState(true);
 
   // -----------------------------
-  // 1. Redirect logic based on session & role
+  // 1. Load full user data if not already present
   // -----------------------------
   useEffect(() => {
-    if (!user) return;
+    const init = async () => {
+      try {
+        if (!user) {
+          await fetchPageData("fullUser", true);
+        }
+      } catch (err) {
+        console.error("Failed to load full user data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, [user, fetchPageData]);
 
-    // If URL role does not match user's role, redirect to correct dashboard
-    const pathSegments = router.pathname.split("/").filter(Boolean);
-    const urlRole = pathSegments[1]?.toUpperCase(); // /dashboard/[role]
+  // -----------------------------
+  // 2. Redirect if URL role does not match user's role
+  // -----------------------------
+  useEffect(() => {
+    if (!user || loading) return;
+
+    const segments = pathname.split("/").filter(Boolean);
+    const urlRole = segments[1]?.toUpperCase(); // /dashboard/[role]
 
     if (urlRole && urlRole !== user.role) {
       router.replace(`/dashboard/${user.role.toLowerCase()}`);
     }
-
-    setLoading(false);
-  }, [user, router]);
+  }, [user, loading, pathname, router]);
 
   // -----------------------------
-  // 2. Show spinner while loading
+  // 3. Show spinner while loading
   // -----------------------------
   if (!user || loading) {
     return (
@@ -43,7 +59,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // -----------------------------
-  // 3. Layout render
+  // 4. Layout render
   // -----------------------------
   return (
     <div className="flex flex-col h-screen bg-back">
