@@ -9,694 +9,493 @@ datasource db {
 
 // ------------------ ENUMS ------------------
 
-enum AttendanceSessionType {
-  STUDENT_CLASS
-  STAFF_WORK
+enum RoleType {
+  // ===== System-level roles =====
+  SUPERADMIN
+  ADMIN
+  MODERATOR
+
+  // ===== Academic staff =====
+  PRINCIPAL
+  VICE_PRINCIPAL
+  TEACHER
+  ASSISTANT_TEACHER
+  COUNSELOR
+  LIBRARIAN
+  EXAM_OFFICER
+
+  // ===== Operational staff =====
+  FINANCE
+  HR
+  RECEPTIONIST
+  IT_SUPPORT
+  TRANSPORT
+  NURSE
+  COOK
+  CLEANER
+  SECURITY
+  MAINTENANCE
+
+  // ===== Users (students & guardians) =====
+  STUDENT
+  CLASS_REP
+  PARENT
+
+  // ===== External or restricted roles =====
+  ALUMNI
+  AUDITOR
+  INSPECTOR
+  GUEST
 }
 
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  EXCUSED
+enum GradeLevel {
+  PRE_K
+  KINDERGARTEN
+  GRADE_1
+  GRADE_2
+  GRADE_3
+  GRADE_4
+  GRADE_5
+  GRADE_6
+  GRADE_7
+  GRADE_8
+  GRADE_9
+  GRADE_10
+  GRADE_11
+  GRADE_12
+  SPECIAL_ED
+  ADULT_ED
+  OTHER
 }
 
-enum PaymentType {
-  DAILY
-  WEEKLY
-  MONTHLY
-  TERM
-  YEARLY
-  ONE_TIME
+enum StudentStatus {
+  ACTIVE
+  WITHDRAWN
+  FROZEN
+  ALUMNI
 }
 
-enum PaymentMethod {
-  CASH
-  BANK_TRANSFER
-  MOBILE_MONEY
-  CARD
-  CHEQUE
+enum GraduationOutcome {
+  PROMOTED
+  REPEATED
+  HELD
+  ALUMNI
+}
+
+enum GraduationScope {
+  GRADE
+  CLASS
+}
+
+enum AssignmentType {
+  HOMEWORK
+  QUIZ
+  EXAM
+  PROJECT
+  CLASSWORK
+  OTHER
 }
 
 enum PaymentStatus {
   PENDING
-  CONFIRMED
+  COMPLETED
   FAILED
   REFUNDED
-}
-
-enum InvoiceStatus {
-  UNPAID
-  PARTIALLY_PAID
-  PAID
   CANCELLED
 }
 
-enum ReceiptType {
-  FULL_PAYMENT
-  PART_PAYMENT
+enum TransactionType {
+  FEE_PAYMENT
+  RESOURCE_PURCHASE
   REFUND
-}
-
-enum ReceiptStatus {
-  ISSUED
-  REPRINTED
-  CANCELLED
-}
-
-enum ExamType {
-  MIDTERM
-  ENDTERM
-  MOCK
-  FINAL
-  WAEC
+  ADJUSTMENT
   OTHER
 }
 
-enum PromotionDecision {
-  PROMOTED
-  REPEATED
-  WITHHELD
-}
-
-enum AssetCategory {
-  CLASSROOM
-  LAB
-  LIBRARY
-  KITCHEN
-  OFFICE
-  TRANSPORT
+enum VehicleType {
+  BUS
+  VAN
+  MINIBUS
   OTHER
 }
 
-enum AssetCondition {
-  NEW
-  GOOD
-  FAIR
-  POOR
-  DAMAGED
-}
-
-enum AssetAction {
-  ADDED
-  REMOVED
-  MAINTENANCE
-  TRANSFER
-  DISPOSED
-}
-
-enum VisitorStatus {
-  CHECKED_IN
-  CHECKED_OUT
-  CANCELLED
-}
-
-enum EventType {
-  HOLIDAY
-  EXAM
-  ASSEMBLY
-  CELEBRATION
-  MEETING
+enum ResourceCategory {
+  STATIONERY
+  BOOK
+  UNIFORM
+  ELECTRONICS
+  SERVICE
   OTHER
 }
 
-enum LibraryAction {
-  BORROWED
-  RETURNED
-  LOST
-  DAMAGED
-  ADDED
-}
+// ------------------ MODELS ------------------
 
-enum DisciplineType {
-  WARNING
-  SUSPENSION
-  EXPULSION
-  NOTE
-}
-
-enum ClassActivityType {
-  CLASSWORK
-  HOMEWORK
-  EXTRA_CLASS
-  EXAM
-}
-
-// ------------------ CORE MODELS ------------------
-
-model SessionData {
-  id             String   @id @default(cuid())
-  user           User     @relation(fields: [userId], references: [id])
-  userId         String
-
-  // Session management
-  sessionKey     String   @unique
-  device         String?  // device/browser info, e.g., "Chrome MacOS"
-  ip             String?  // optional IP tracking
-  createdAt      DateTime @default(now())
-  expiresAt      DateTime // optional expiration
-
-  // In-App activity
-  pagesVisited   Json?    // array of app pages visited [{page: "/dashboard", timestamp: "..."}]
-  clicks         Json?    // array of clicks [{elementId: "btnSubmit", timestamp: "..."}]
-  keyboardInputs Json?    // per page inputs [{page: "/form", input: "abc", timestamp: "..."}]
-  bookmarks      Json?    // bookmarks saved inside the app [{page: "/lesson/1", title: "..."}]
-
-  // Browser-level activity (consent required)
-  externalPagesVisited Json? // tracks external pages visited [{url: "...", timestamp: "..."}]
-  localStorageData    Json? // snapshot of localStorage (non-sensitive)
-  sessionStorageData  Json? // snapshot of sessionStorage (non-sensitive)
-  cookiesData         Json? // non-sensitive cookies
-
-  // Optional analytics
-  mouseMovements      Json? // mouse movements captured inside app
-  scrollPositions     Json? // per page scroll positions
-  activeTime          Int?  // total active time in seconds
-
-  // Relations
-  userSessionUpdates  SessionUpdate[] // logs updates or refreshes per session
-
-  @@index([userId])
-  @@index([sessionKey])
-}
-
-model SessionUpdate {
-  id            String      @id @default(cuid())
-  session       SessionData @relation(fields: [sessionId], references: [id])
-  sessionId     String
-  updatedAt     DateTime    @default(now())
-  updateReason  String      // e.g., "manual refresh", "auto-refresh", "permission change"
-}
-
-
-// Dynamic User Statuses
-model UserStatus {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-}
-
-
-// Dynamic Roles
-model RoleModel {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  // Self-relation Many-to-Many
-  relatedRoles RoleModel[] @relation("RoleRelations")
-  relatedBy    RoleModel[] @relation("RoleRelations")
-
-  users       User[]
-  permissions RolePermission[]
-}
-
-// User
-model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String?   @unique
-  phone        String?
-  password     String
-  sessions     SessionData[] // back-relation for SessionData
-
-  roleId       String
-  role         RoleModel @relation(fields: [roleId], references: [id])
-
-  statusId     String
-  status       UserStatus @relation(fields: [statusId], references: [id])
-
-  profilePic   String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  staff        Staff?
-  student      Student?
-  parentOf     Student[] @relation("UserParentOf")
-  parents      Student[] @relation("UserParents")
-
-  payments        Payment[] @relation("PaymentUser")
-  issuedPayments  Payment[] @relation("PaymentIssuer")
-  invoices        Invoice[]
-  attendanceRecords AttendanceRecord[]
-
-  createdEvents   SchoolEvent[] @relation("EventCreator")
-  events          SchoolEvent[] @relation("EventParticipants")
-
-  borrowedBooks   LibraryLog[] @relation("LibraryUser")
-  drivingVehicles TransportVehicle[] @relation("VehicleDriver")
-  issuedDisciplineLogs DisciplineLog[] @relation("DisciplineIssuer")
-  createdAnnouncements Announcement[]
-
-  createdVisitorLogs  VisitorLog[] @relation("VisitorCreated")
-  visitedVisitorLogs  VisitorLog[] @relation("VisitorVisited")
-  approvedVisitorLogs VisitorLog[] @relation("VisitorApproved")
-
-  classActivities ClassActivity[] @relation("ClassActivityTeacher")
-
-  attendanceSessionsTaken AttendanceSession[] @relation("AttendanceTeacher")
-  promotionsDecided       Promotion[] @relation("PromotionDecider")
-  schoolExpensesPaid      SchoolExpense[] @relation("ExpensePaidBy")
-  schoolIncomesRecorded   SchoolIncome[] @relation("IncomeRecordedBy")
-  departments             Department[] @relation("DepartmentOwner")
-  sectionsTaught          Section[] @relation("SectionTeacher")
-  timetables              Timetable[] @relation("TimetableTeacher")
-
-  performedAssetLogs AssetLog[]
-
-  @@index([roleId])
-  @@index([statusId])
-}
-
-// ------------------ STAFF/STUDENT ------------------
-
-model Staff {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  position  String
-  user      User     @relation(fields: [userId], references: [id])
-  salaries  StaffSalary[] @relation("SalaryIssuer")
-  departments Department[] @relation("DepartmentStaff")
-
-  @@index([userId])
-}
-
-model Student {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  sectionId String
-  rollNo    String
-  user      User     @relation(fields: [userId], references: [id])
-  section   Section  @relation(fields: [sectionId], references: [id])
-  parents   User[]   @relation("UserParents")
-  parentOf  User[]   @relation("UserParentOf")
-  promotions Promotion[]
-  classActivities ClassActivity[]
-
-  @@unique([rollNo, sectionId])
-  @@index([sectionId])
-}
-
-// ------------------ SECTION ------------------
-
-model Section {
-  id        String    @id @default(cuid())
+// ------------------ SYSTEM ADMINS ------------------
+model SuperAdmin {
+  id        Int            @id @default(autoincrement())
   name      String
-  students  Student[]
-  teacherId String?
-  teacher   User?     @relation("SectionTeacher", fields: [teacherId], references: [id])
-  attendanceSessions AttendanceSession[] @relation("AttendanceSection")
-  exams     Exam[]
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  timetables   Timetable[]
+  email     String         @unique
+  password  String
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
-  @@index([teacherId])
-  @@index([departmentId])
+  sessions  SchoolSession[]
 }
 
-// ------------------ ATTENDANCE ------------------
+// ------------------ SCHOOLS / TENANTS ------------------
+model SchoolSession {
+  id            Int            @id @default(autoincrement())
+  superAdminId  Int
+  name          String
+  slug          String?        @unique
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now())
+  deletedAt     DateTime?
 
-model AttendanceRecord {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  status    AttendanceStatus
-  date      DateTime
-  sessionId String?
-  session   AttendanceSession? @relation("AttendanceSessionRecords", fields: [sessionId], references: [id])
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([status])
+  superAdmin    SuperAdmin     @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+  users         User[]
+  classrooms Classroom[]
+  courses       Course[]
+  transportation Transportation[]
+  resources     Resource[]
+  transactions  FinancialTransaction[]
 }
 
-model AttendanceSession {
-  id        String                @id @default(cuid())
-  type      AttendanceSessionType
-  teacherId String
-  teacher   User                  @relation("AttendanceTeacher", fields: [teacherId], references: [id])
-  sectionId String
-  section   Section               @relation("AttendanceSection", fields: [sectionId], references: [id])
-  records   AttendanceRecord[] @relation("AttendanceSessionRecords")
+// ------------------ CORE USERS ------------------
+model User {
+  id                Int            @id @default(autoincrement())
+  schoolSessionId   Int
+  email             String
+  password          String?
+  role              RoleType
+  active            Boolean        @default(true)
 
-  @@index([teacherId])
-  @@index([sectionId])
-  @@index([type])
+  fullName          String
+  profilePicture    String?
+  lastLoginAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+  parentStudentRelations  ParentStudent[] @relation("ParentUserToParentStudent")
+
+  schoolSession     SchoolSession  @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+
+  // Profiles
+  studentProfile    StudentProfile?
+  teacherProfile    TeacherProfile?
+  parentProfile     ParentProfile?
+  staffProfile      StaffProfile?
+
+  // Graduation processing relation
+  graduationProcessed GraduationRecord[] @relation("GraduationProcessedBy")
+  graduationsProcessed GraduationBatch[] @relation("GraduationProcessedBy")
+
+  // Course & Assignment relations
+  coursesTeaching   Course[]       @relation("CourseTeacher")
+  coursesEnrolled   Course[]       @relation("CourseStudents")
+  assignmentsGiven  Assignment[]   @relation("AssignmentTeacher")
+  assignmentsAssigned Assignment[] @relation("AssignmentStudents")
+  grades            Grade[]
+  purchases         Purchase[]
+  payments          Payment[]      @relation("UserPayments")
+  createdByFor      FinancialTransaction[] @relation("CreatedBy")
+  updatedByFor      FinancialTransaction[] @relation("UpdatedBy")
+
+  @@unique([schoolSessionId, email])
 }
 
-// ------------------ ACADEMIC MODELS ------------------
+// ------------------ PROFILES ------------------
 
-model Subject {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Student
+model StudentProfile {
+  id              String             @id @default(cuid())
+  userId          Int?               @unique
+  admissionNumber String?            @unique
+  admissionDate   DateTime?
+  dateOfBirth     DateTime?
+  gender          String?
+  currentGrade    GradeLevel
+  status          StudentStatus      @default(ACTIVE)
 
-  classActivities ClassActivity[]
-  timetables       Timetable[]
+  classroomId     String?
+  classroom       Classroom?         @relation(fields: [classroomId], references: [id])
+
+  graduations     GraduationRecord[]
+  parents         ParentStudent[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @default(now())
+
+  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
-model Exam {
-  id         String @id @default(cuid())
-  title      String
-  sectionId  String
-  section    Section @relation(fields: [sectionId], references: [id])
-  startDate  DateTime
-  endDate    DateTime
-  examType   ExamType
+// Teacher
+model TeacherProfile {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  employeeId      String    @unique
+  hireDate        DateTime
+  specialization  String?
+  qualification   String?
+  profilePicture  String?
 
-  classActivities ClassActivity[] @relation("ExamActivities")
-
-  @@index([sectionId])
-  @@index([examType])
+  user            User      @relation(fields: [userId], references: [id])
 }
 
-// ------------------ CLASS ACTIVITIES ------------------
+// Parent
+model ParentProfile {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  occupation      String?
+  phoneNumber     String?
+  address         String?
+  profilePicture  String?
 
-model ClassActivity {
-  id        String   @id @default(cuid())
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
+ students ParentStudent[] @relation("ParentToStudent")
+ }
 
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
+// Staff
+model StaffProfile {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  employeeId      String    @unique
+  department      String?
+  hireDate        DateTime
+  profilePicture  String?
 
-  teacherId String
-  teacher   User     @relation("ClassActivityTeacher", fields: [teacherId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
+}
 
-  type      ClassActivityType
-  examId    String?  // optional link to an Exam if type === EXAM
-  exam      Exam?    @relation("ExamActivities", fields: [examId], references: [id])
+// Parent-Student join
 
-  score     Float?
-  remarks   String?
+model ParentStudent {
+  id              String           @id @default(cuid())
+  studentId       String
+  parentProfileId Int
+  parentUserId    Int
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  parentProfile   ParentProfile    @relation("ParentToStudent", fields: [parentProfileId], references: [id])
+  student         StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent          User             @relation("ParentUserToParentStudent", fields: [parentUserId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, subjectId, type, createdAt]) 
+  relationType    String?          // e.g. "mother", "father", "guardian"
+  createdAt       DateTime         @default(now())
+
   @@index([studentId])
-  @@index([subjectId])
-  @@index([teacherId])
-  @@index([type])
-  @@index([examId])
+  @@index([parentUserId])
+}
+// ------------------ CLASSROOMS ------------------
+model Classroom {
+  id              String            @id @default(cuid())
+  name            String
+  gradeLevel      GradeLevel
+  schoolSessionId Int
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now())
+  graduationBatches GraduationBatch[]
+
+
+  students        StudentProfile[]
+  schoolSession   SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
 }
 
+// ------------------ GRADUATION ------------------
+model GraduationBatch {
+  id             String            @id @default(cuid())
+  scope          GraduationScope
+  gradeLevel     GradeLevel
+  classroomId    String?
+  classroom      Classroom?        @relation(fields: [classroomId], references: [id])
+  year           Int
+  processedById  Int
+  processedBy    User              @relation("GraduationProcessedBy", fields: [processedById], references: [id], onDelete: Restrict)
+  processedByRole RoleType
+  records        GraduationRecord[]
+  createdAt      DateTime          @default(now())
+}
 
-// ------------------ FINANCE MODELS ------------------
+model GraduationRecord {
+  id              String            @id @default(cuid())
+  studentId       String
+  student         StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batchId         String
+  batch           GraduationBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  fromGrade       GradeLevel
+  toGrade         GradeLevel?
+  outcome         GraduationOutcome @default(PROMOTED)
+  processedById   Int
+  processedBy     User              @relation("GraduationProcessedBy", fields: [processedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+// ------------------ COURSES & ASSIGNMENTS ------------------
+model Course {
+  id               Int       @id @default(autoincrement())
+  schoolSessionId  Int
+  name             String
+  code             String?    // optional shorthand/code
+  description      String?
+  teacherId        Int?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @default(now())
+  deletedAt        DateTime?
+
+  schoolSession    SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  teacher          User?         @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  students         User[]        @relation("CourseStudents")
+  assignments      Assignment[]
+  grades           Grade[]
+}
+
+model Assignment {
+  id               Int            @id @default(autoincrement())
+  courseId         Int
+  title            String
+  description      String?
+  type             AssignmentType @default(HOMEWORK)
+  teacherId        Int?
+  dueDate          DateTime?
+  metadata         Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now())
+  deletedAt        DateTime?
+
+  course           Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  grades Grade[] @relation("AssignmentGrades")
+  teacher          User?          @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  students         User[]         @relation("AssignmentStudents")
+  submittedAt      DateTime?
+}
+
+model Grade {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  courseId      Int
+  assignmentId  Int?
+  value         Float
+  maxValue      Float?
+  letter        String?
+  feedback      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation("AssignmentGrades", fields: [assignmentId], references: [id], onDelete: SetNull)
+}
+
+// ------------------ TRANSPORTATION ------------------
+model Transportation {
+  id             Int           @id @default(autoincrement())
+  schoolSessionId Int
+  routeName      String
+  vehicleType    VehicleType
+  vehicleNumber  String?
+  driverName     String?
+  capacity       Int
+  departureTime  DateTime?
+  arrivalTime    DateTime?
+  stops          Json?         // ordered list of stops {name, lat, lng, eta}
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+  deletedAt      DateTime?
+
+  schoolSession  SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  stopsTable     TransportStop[]
+}
+
+model TransportStop {
+  id              Int            @id @default(autoincrement())
+  transportationId Int
+  name            String
+  orderIndex      Int
+  lat             Decimal?       @db.Decimal(10, 7)
+  lng             Decimal?       @db.Decimal(10, 7)
+  eta             DateTime?
+  createdAt       DateTime       @default(now())
+
+  transportation  Transportation @relation(fields: [transportationId], references: [id], onDelete: Cascade)
+}
+
+// ------------------ RESOURCES & FINANCE ------------------
+model Resource {
+  id               Int               @id @default(autoincrement())
+  schoolSessionId  Int
+  sku              String?           @unique
+  name             String
+  description      String?
+  category         ResourceCategory  @default(OTHER)
+  price            Float
+  discountPercent  Float?
+  stockQuantity    Int               @default(0)
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now())
+  deletedAt        DateTime?
+
+  schoolSession    SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  purchases        Purchase[]
+}
+
+model Purchase {
+  id               Int                 @id @default(autoincrement())
+  resourceId       Int
+  buyerId          Int?
+  quantity         Int                 @default(1)
+  unitPrice        Float
+  discountPercent  Float?
+  totalAmount      Float
+  currency         String              @default("USD")
+  status           PaymentStatus       @default(PENDING)
+  metadata         Json?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @default(now())
+
+  resource         Resource            @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  buyer            User?               @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  payments         Payment[]           @relation("PurchasePayments")
+}
+
+model FinancialTransaction {
+  id               Int              @id @default(autoincrement())
+  schoolSessionId  Int
+  type             TransactionType
+  reference        String?
+  amount           Float
+  currency         String           @default("USD")
+  status           PaymentStatus
+  metadata         Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @default(now())
+  createdById      Int?
+  updatedById      Int?
+  deletedAt        DateTime?
+
+  schoolSession    SchoolSession    @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  createdBy        User?            @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy        User?            @relation("UpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  payments         Payment[]        @relation("TransactionPayments")
+}
 
 model Payment {
-  id          String      @id @default(cuid())
-  amount      Float
-  paymentType PaymentType
-  method      PaymentMethod
-  status      PaymentStatus @default(PENDING)
-  transactionRef String?   @unique
-  userId      String
-  user        User        @relation("PaymentUser", fields: [userId], references: [id])
-  issuedById  String?
-  issuedBy    User?       @relation("PaymentIssuer", fields: [issuedById], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                Int                @id @default(autoincrement())
+  transactionId     Int?
+  purchaseId        Int?
+  userId            Int?
+  gateway           String?
+  gatewayRef        String?
+  amount            Float
+  currency          String             @default("GHC")
+  status            PaymentStatus
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @default(now())
 
-  @@index([userId])
-  @@index([issuedById])
-  @@index([status])
+  transaction       FinancialTransaction? @relation("TransactionPayments", fields: [transactionId], references: [id], onDelete: SetNull)
+  purchase          Purchase?            @relation("PurchasePayments", fields: [purchaseId], references: [id], onDelete: SetNull)
+  user              User?                @relation("UserPayments", fields: [userId], references: [id], onDelete: SetNull)
 }
-
-model Invoice {
-  id          String       @id @default(cuid())
-  amount      Float
-  status      InvoiceStatus @default(UNPAID)
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  receipts    Receipt[]
-
-  @@index([userId])
-  @@index([status])
-}
-
-model Receipt {
-  id        String      @id @default(cuid())
-  invoiceId String?
-  invoice   Invoice?    @relation(fields: [invoiceId], references: [id])
-  type      ReceiptType
-  status    ReceiptStatus @default(ISSUED)
-  issuedAt  DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
-  @@index([invoiceId])
-  @@index([status])
-}
-
-model StaffSalary {
-  id         String @id @default(cuid())
-  staffId    String
-  staff      Staff @relation("SalaryIssuer", fields: [staffId], references: [id])
-  amount     Float
-  payPeriod  PaymentType
-  status     PaymentStatus @default(PENDING)
-  method     PaymentMethod
-  updatedAt  DateTime @updatedAt
-
-  @@index([staffId])
-  @@index([status])
-}
-
-model SchoolExpense {
-  id        String @id @default(cuid())
-  purpose   String
-  amount    Float
-  paidById  String?
-  paidBy    User? @relation("ExpensePaidBy", fields: [paidById], references: [id])
-  expenseDate DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([paidById])
-}
-
-model SchoolIncome {
-  id           String @id @default(cuid())
-  description  String
-  amount       Float
-  receivedFrom String?
-  paymentMethod PaymentMethod
-  recordedById String?
-  recordedBy   User? @relation("IncomeRecordedBy", fields: [recordedById], references: [id])
-  receivedAt   DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([recordedById])
-}
-
-// ------------------ SCHOOL OPERATIONS ------------------
-
-model Department {
-  id        String @id @default(cuid())
-  name      String
-  staff     Staff[] @relation("DepartmentStaff")
-  sections  Section[]
-  ownerId   String?
-  owner     User? @relation("DepartmentOwner", fields: [ownerId], references: [id])
-
-  @@index([ownerId])
-}
-
-model Asset {
-  id          String @id @default(cuid())
-  name        String
-  description String?
-  category    AssetCategory
-  condition   AssetCondition
-  quantity    Int     @default(1)
-  location    String?
-  updatedAt   DateTime @updatedAt
-}
-
-model AssetLog {
-  id           String @id @default(cuid())
-  assetId      String
-  action       AssetAction
-  notes        String?
-  performedById String
-  performedBy  User @relation(fields: [performedById], references: [id])
-  createdAt    DateTime @default(now())
-
-  @@index([assetId])
-  @@index([performedById])
-}
-
-model VisitorLog {
-  id            String @id @default(cuid())
-  visitorName   String
-  phone         String?
-  email         String?
-  checkIn       DateTime @default(now())
-  checkOut      DateTime?
-  purpose       String
-  visitedUserId String?
-  visitedUser   User? @relation("VisitorVisited", fields: [visitedUserId], references: [id])
-  status        VisitorStatus @default(CHECKED_IN)
-  notes         String?
-  createdById   String
-  createdBy     User @relation("VisitorCreated", fields: [createdById], references: [id])
-  approvedById  String?
-  approvedBy    User? @relation("VisitorApproved", fields: [approvedById], references: [id])
-
-  @@index([visitedUserId])
-  @@index([createdById])
-  @@index([approvedById])
-  @@index([status])
-}
-
-model SchoolEvent {
-  id          String @id @default(cuid())
-  title       String
-  description String?
-  eventType   EventType
-  startDate   DateTime
-  endDate     DateTime
-  isPublic    Boolean @default(true)
-  createdById String
-  createdBy   User   @relation("EventCreator", fields: [createdById], references: [id])
-  participants User[] @relation("EventParticipants")
-
-  @@index([createdById])
-  @@index([eventType])
-}
-
-model Timetable {
-  id        String   @id @default(cuid())
-  sectionId String
-  section   Section  @relation(fields: [sectionId], references: [id])
-  teacherId String
-  teacher   User     @relation("TimetableTeacher", fields: [teacherId], references: [id])
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  startTime DateTime
-  endTime   DateTime
-  day       String
-
-  @@index([sectionId])
-  @@index([teacherId])
-  @@index([subjectId])
-}
-
-
-model LibraryLog {
-  id        String @id @default(cuid())
-  bookId    String
-  userId    String
-  user      User @relation("LibraryUser", fields: [userId], references: [id])
-  action    LibraryAction
-  borrowedAt DateTime @default(now())
-  returnedAt DateTime?
-
-  @@index([bookId])
-  @@index([userId])
-  @@index([action])
-}
-
-model TransportVehicle {
-  id        String @id @default(cuid())
-  name      String
-  capacity  Int
-  driverId  String?
-  driver    User? @relation("VehicleDriver", fields: [driverId], references: [id])
-  acquiredAt DateTime?
-  condition  AssetCondition
-  updatedAt  DateTime @updatedAt
-
-  @@index([driverId])
-}
-
-model DisciplineLog {
-  id        String @id @default(cuid())
-  studentId String?
-  issuedById String
-  issuedBy  User @relation("DisciplineIssuer", fields: [issuedById], references: [id])
-  type      DisciplineType
-  notes     String?
-  createdAt DateTime @default(now())
-
-  @@index([studentId])
-  @@index([issuedById])
-  @@index([type])
-}
-
-model Announcement {
-  id          String @id @default(cuid())
-  content     String
-  createdById String
-  createdBy   User @relation(fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([createdById])
-}
-
-model Promotion {
-  id          String @id @default(cuid())
-  studentId   String
-  student     Student @relation(fields: [studentId], references: [id])
-  term        Int?
-  decision    PromotionDecision
-  decidedById String
-  decidedBy   User @relation("PromotionDecider", fields: [decidedById], references: [id])
-
-  @@index([studentId])
-  @@index([decidedById])
-  @@index([decision])
-}
-
-// ------------------ ROLE-BASED ACCESS CONTROL ------------------
-
-model RolePermission {
-  id        String      @id @default(cuid())
-  roleId    String
-  role      RoleModel   @relation(fields: [roleId], references: [id])
-
-  actions   String[]    // ["read", "create", "update", "delete"]
-  resources RolePermissionResource[] @relation("PermissionResources")
-  
-  // Optional group-based access to reduce per-record entries
-  groupType String?     // e.g., "SECTION", "DEPARTMENT", "GLOBAL"
-  groupId   String?     // ID of section/department if applicable
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([roleId])
-  @@index([groupType, groupId])
-}
-
-model RolePermissionResource {
-  id           String @id @default(cuid())
-  permissionId String
-  permission   RolePermission @relation("PermissionResources", fields: [permissionId], references: [id])
-  resourceName String           // e.g., "Student", "Invoice", "ClassActivity"
-
-  // Only store exceptions here; otherwise, use groupType/groupId in RolePermission
-  allowedRecords RolePermissionRecord[] @relation("ResourceAllowedRecords")
-
-  @@index([permissionId])
-  @@index([resourceName])
-}
-
-model RolePermissionRecord {
-  id         String @id @default(cuid())
-  resourceId String
-  resource   RolePermissionResource @relation("ResourceAllowedRecords", fields: [resourceId], references: [id])
-  recordId   String // actual ID of the record (e.g., Student.id, Invoice.id)
-
-  @@index([resourceId, recordId])
-}
-
