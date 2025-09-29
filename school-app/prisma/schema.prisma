@@ -286,7 +286,9 @@ model ParentStudent {
   @@index([studentId])
   @@index([parentUserId])
 }
+
 // ------------------ CLASSROOMS ------------------
+
 model Classroom {
   id              String            @id @default(cuid())
   name            String
@@ -296,9 +298,10 @@ model Classroom {
   updatedAt       DateTime          @default(now())
   graduationBatches GraduationBatch[]
 
-
   students        StudentProfile[]
   schoolSession   SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolSessionId, name]) // ✅ makes classroom unique per session
 }
 
 // ------------------ GRADUATION ------------------

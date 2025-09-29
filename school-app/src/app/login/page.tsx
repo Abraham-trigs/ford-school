@@ -1,7 +1,7 @@
 // app/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -9,14 +9,28 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) router.push("/dashboard"); // redirect if already logged in
+      }
+    };
+    checkAuth();
+  }, [router]);
 
   const handleLogin = async () => {
-    setError(""); // reset previous errors
+    setError("");
     if (!email || !password) {
       setError("Please enter email and password");
       return;
     }
 
+    setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -27,14 +41,17 @@ export default function LoginPage() {
       if (!res.ok) {
         const data = await res.json();
         setError(data.message || "Login failed");
+        setLoading(false);
         return;
       }
 
       // login success
-      router.push("/dashboard"); // redirect to dashboard or home page
+      router.push("/dashboard");
     } catch (err) {
-      setError("Something went wrong. Try again.");
       console.error(err);
+      setError("Something went wrong. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -65,9 +82,10 @@ export default function LoginPage() {
 
         <button
           onClick={handleLogin}
-          className="w-full px-6 py-3 bg-accentTeal text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300"
+          disabled={loading}
+          className="w-full px-6 py-3 bg-accentTeal text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
         >
-          Login
+          {loading ? "Logging in..." : "Login"}
         </button>
       </div>
     </main>
