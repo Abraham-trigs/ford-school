@@ -1,3 +1,11 @@
+/* Import Lexend Deca */
+@import url('https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700;800&display=swap');
+
+/* Define CSS variable for Tailwind font-family */
+:root {
+  --font-lexend: 'Lexend Deca', sans-serif;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,7 +13,7 @@
 /* Global styles */
 html,
 body {
-  @apply bg-back font-sans;
+  @apply bg-primary font-sans text-lightGray;
   margin: 0;
   padding: 0;
   min-height: 100vh;
@@ -13,10 +21,41 @@ body {
 
 /* Headings use Lexend Deca (display font) */
 h1, h2, h3, h4, h5, h6 {
-  @apply font-display text-wine;
+  @apply font-display text-lightGray;
 }
 
 /* Links */
 a {
   @apply no-underline;
 }
+
+/* Buttons */
+button {
+  @apply cursor-pointer rounded transition-colors duration-200;
+}
+
+/* Input fields */
+input, textarea {
+  @apply bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple;
+}
+
+/* Error & warning messages */
+.error-message {
+  @apply text-errorPink font-semibold;
+}
+
+/* Utility colors for your theme */
+.text-primary { color: #121212; }
+.text-secondary { color: #1E1E1E; }
+.text-accentPurple { color: #7E48CC; }
+.text-accentTeal { color: #03DAC6; }
+.text-lightGray { color: #E0E0E0; }
+.text-errorPink { color: #CF6679; }
+.text-variantPurple { color: #BB86FC; }
+.bg-primary { background-color: #121212; }
+.bg-secondary { background-color: #1E1E1E; }
+.bg-accentPurple { background-color: #7E48CC; }
+.bg-accentTeal { background-color: #03DAC6; }
+.bg-lightGray { background-color: #E0E0E0; }
+.bg-errorPink { background-color: #CF6679; }
+.bg-variantPurple { background-color: #BB86FC; }

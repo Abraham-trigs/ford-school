@@ -1,31 +1,35 @@
-// "use client";
+// app/page.tsx
+"use client";
 
-// import { useEffect } from "react";
-// import { useRouter } from "next/navigation";
-// import { useSessionStore } from "@/lib/store/sessionStore";
-// import NavigateToLoginButton from "@/components/NavigateToLoginButton";
+import { useRouter } from "next/navigation";
 
-// export default function Home() {
-//   const router = useRouter();
-//   const { fullUserData: user } = useSessionStore();
+export default function HomePage() {
+  const router = useRouter();
 
-//   useEffect(() => {
-//     if (user?.role?.name) {
-//       // Redirect to dashboard based on role
-//       router.replace(`/dashboard/${user.role.name.toLowerCase()}`);
-//     }
-//   }, [user, router]);
+  const handleLogin = () => {
+    router.push("/login");
+  };
 
-//   return (
-//     <div className="p-8">
-//       <h1 className="text-wine font-display text-4xl">Welcome</h1>
-//       <p className="text-light font-sans mt-2">This is the homepage</p>
+  return (
+    <main className="w-screen h-screen bg-secondary flex items-center justify-center">
+      {/* Parent container: deepPurple */}
+      <div className="bg-deepPurple p-8 rounded-lg w-full max-w-md text-center shadow-lg">
+        {/* Child text uses secondary for contrast */}
+        <h1 className="text-6xl font-display font-bold text-secondary mb-4">
+          Astir
+        </h1>
+        <p className="text-secondary text-lg mb-6">
+          Welcome to your School Management System
+        </p>
 
-//       <button className="bg-wine text-switch px-4 py-2 rounded mt-4">
-//         Get Started
-//       </button>
-
-//       {!user && <NavigateToLoginButton />}
-//     </div>
-//   );
-// }
+        {/* Button using parent-child pattern */}
+        <button
+          onClick={handleLogin}
+          className="px-8 py-3 bg-secondary text-deepPurple rounded-lg shadow-md hover:bg-accentTeal hover:text-secondary transition-colors duration-300 font-semibold"
+        >
+          Login
+        </button>
+      </div>
+    </main>
+  );
+}

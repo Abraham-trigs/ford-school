@@ -1,3 +1,4 @@
+// tailwind.config.ts
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -9,10 +10,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        wine: "#72040e",
-        light: "#920055",
-        back: "#dee4ea",
-        switch: "#eee6e6",
+        primary: "#121212",       // Main dark background
+        secondary: "#1E1E1E",     // Slightly lighter background
+        accentPurple: "#BB86FC",  // Primary accent / buttons
+        accentTeal: "#03DAC6",    // Secondary accent / highlights
+        lightGray: "#E0E0E0",     // Backgrounds / borders
+        error: "#CF6679",          // Errors and warnings
+        deepPurple: "#7E48CC",    // For headings / emphasis
       },
       fontFamily: {
         sans: ["var(--font-lexend)", "ui-sans-serif", "system-ui"],
