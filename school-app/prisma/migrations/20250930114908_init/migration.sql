@@ -47,6 +47,8 @@ CREATE TABLE "public"."SchoolSession" (
     "superAdminId" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -58,19 +60,30 @@ CREATE TABLE "public"."SchoolSession" (
 -- CreateTable
 CREATE TABLE "public"."User" (
     "id" SERIAL NOT NULL,
-    "schoolSessionId" INTEGER NOT NULL,
     "email" TEXT NOT NULL,
-    "password" TEXT,
-    "role" "public"."RoleType" NOT NULL,
-    "active" BOOLEAN NOT NULL DEFAULT true,
     "fullName" TEXT NOT NULL,
     "profilePicture" TEXT,
     "lastLoginAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
+    "department" TEXT,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."UserSchoolSession" (
+    "id" SERIAL NOT NULL,
+    "humanId" TEXT NOT NULL,
+    "schoolSessionId" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "role" "public"."RoleType" NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "UserSchoolSession_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -99,6 +112,7 @@ CREATE TABLE "public"."TeacherProfile" (
     "specialization" TEXT,
     "qualification" TEXT,
     "profilePicture" TEXT,
+    "department" TEXT,
 
     CONSTRAINT "TeacherProfile_pkey" PRIMARY KEY ("id")
 );
@@ -206,7 +220,7 @@ CREATE TABLE "public"."Assignment" (
     "dueDate" TIMESTAMP(3),
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
     "submittedAt" TIMESTAMP(3),
 
@@ -224,7 +238,7 @@ CREATE TABLE "public"."Grade" (
     "letter" TEXT,
     "feedback" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Grade_pkey" PRIMARY KEY ("id")
 );
@@ -276,7 +290,7 @@ CREATE TABLE "public"."Resource" (
     "stockQuantity" INTEGER NOT NULL DEFAULT 0,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "Resource_pkey" PRIMARY KEY ("id")
@@ -295,7 +309,7 @@ CREATE TABLE "public"."Purchase" (
     "status" "public"."PaymentStatus" NOT NULL DEFAULT 'PENDING',
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Purchase_pkey" PRIMARY KEY ("id")
 );
@@ -311,7 +325,7 @@ CREATE TABLE "public"."FinancialTransaction" (
     "status" "public"."PaymentStatus" NOT NULL,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdById" INTEGER,
     "updatedById" INTEGER,
     "deletedAt" TIMESTAMP(3),
@@ -332,7 +346,7 @@ CREATE TABLE "public"."Payment" (
     "status" "public"."PaymentStatus" NOT NULL,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
@@ -360,7 +374,16 @@ CREATE UNIQUE INDEX "SuperAdmin_email_key" ON "public"."SuperAdmin"("email");
 CREATE UNIQUE INDEX "SchoolSession_slug_key" ON "public"."SchoolSession"("slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_schoolSessionId_email_key" ON "public"."User"("schoolSessionId", "email");
+CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserSchoolSession_humanId_key" ON "public"."UserSchoolSession"("humanId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserSchoolSession_schoolSessionId_email_key" ON "public"."UserSchoolSession"("schoolSessionId", "email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserSchoolSession_schoolSessionId_userId_key" ON "public"."UserSchoolSession"("schoolSessionId", "userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "StudentProfile_userId_key" ON "public"."StudentProfile"("userId");
@@ -405,7 +428,10 @@ CREATE INDEX "_AssignmentStudents_B_index" ON "public"."_AssignmentStudents"("B"
 ALTER TABLE "public"."SchoolSession" ADD CONSTRAINT "SchoolSession_superAdminId_fkey" FOREIGN KEY ("superAdminId") REFERENCES "public"."SuperAdmin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."User" ADD CONSTRAINT "User_schoolSessionId_fkey" FOREIGN KEY ("schoolSessionId") REFERENCES "public"."SchoolSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."UserSchoolSession" ADD CONSTRAINT "UserSchoolSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."UserSchoolSession" ADD CONSTRAINT "UserSchoolSession_schoolSessionId_fkey" FOREIGN KEY ("schoolSessionId") REFERENCES "public"."SchoolSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."StudentProfile" ADD CONSTRAINT "StudentProfile_classroomId_fkey" FOREIGN KEY ("classroomId") REFERENCES "public"."Classroom"("id") ON DELETE SET NULL ON UPDATE CASCADE;

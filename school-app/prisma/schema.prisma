@@ -145,65 +145,83 @@ model SuperAdmin {
 
 // ------------------ SCHOOLS / TENANTS ------------------
 model SchoolSession {
-  id            Int            @id @default(autoincrement())
-  superAdminId  Int
-  name          String
-  slug          String?        @unique
-  metadata      Json?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @default(now())
-  deletedAt     DateTime?
+  id           Int       @id @default(autoincrement())
+  superAdminId Int
+  name         String
+  slug         String?   @unique
+  startDate    DateTime
+  endDate      DateTime
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+  deletedAt    DateTime?
 
-  superAdmin    SuperAdmin     @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
-  users         User[]
-  classrooms Classroom[]
-  courses       Course[]
+  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+  memberships  UserSchoolSession[]
+  classrooms   Classroom[]
+  courses      Course[]
   transportation Transportation[]
-  resources     Resource[]
-  transactions  FinancialTransaction[]
+  resources    Resource[]
+  transactions FinancialTransaction[]
 }
+
 
 // ------------------ CORE USERS ------------------
 model User {
-  id                Int            @id @default(autoincrement())
-  schoolSessionId   Int
-  email             String
-  password          String?
-  role              RoleType
-  active            Boolean        @default(true)
-
+  id                Int                   @id @default(autoincrement())
+  email             String                 @unique           
   fullName          String
   profilePicture    String?
   lastLoginAt       DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
   deletedAt         DateTime?
+  department      String?
+
+
+  // Relations
+  memberships       UserSchoolSession[]   // multiple school memberships
   parentStudentRelations  ParentStudent[] @relation("ParentUserToParentStudent")
 
-  schoolSession     SchoolSession  @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
-
-  // Profiles
+  // Profiles (these might need to be linked to UserSchoolSession later, not global User)
   studentProfile    StudentProfile?
   teacherProfile    TeacherProfile?
   parentProfile     ParentProfile?
   staffProfile      StaffProfile?
 
-  // Graduation processing relation
+  // Graduation
   graduationProcessed GraduationRecord[] @relation("GraduationProcessedBy")
   graduationsProcessed GraduationBatch[] @relation("GraduationProcessedBy")
 
-  // Course & Assignment relations
-  coursesTeaching   Course[]       @relation("CourseTeacher")
-  coursesEnrolled   Course[]       @relation("CourseStudents")
-  assignmentsGiven  Assignment[]   @relation("AssignmentTeacher")
-  assignmentsAssigned Assignment[] @relation("AssignmentStudents")
+  // Courses & Assignments
+  coursesTeaching   Course[]              @relation("CourseTeacher")
+  coursesEnrolled   Course[]              @relation("CourseStudents")
+  assignmentsGiven  Assignment[]          @relation("AssignmentTeacher")
+  assignmentsAssigned Assignment[]        @relation("AssignmentStudents")
+
+  // Finance
   grades            Grade[]
   purchases         Purchase[]
-  payments          Payment[]      @relation("UserPayments")
+  payments          Payment[]             @relation("UserPayments")
   createdByFor      FinancialTransaction[] @relation("CreatedBy")
   updatedByFor      FinancialTransaction[] @relation("UpdatedBy")
+}
 
-  @@unique([schoolSessionId, email])
+model UserSchoolSession {
+  id              Int           @id @default(autoincrement())
+  humanId         String        @unique              // School-specific human ID (e.g. SCH01-JDOE)
+  schoolSessionId Int
+  userId          Int
+  email           String                               // email inside this school (auto-generated)
+  password        String                               // password scoped to this school membership
+  role            RoleType
+  active          Boolean       @default(true)
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolSession   SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolSessionId, email])        // enforce unique email per school
+  @@unique([schoolSessionId, userId])       // user can only have one membership record per school
 }
 
 // ------------------ PROFILES ------------------
@@ -239,6 +257,7 @@ model TeacherProfile {
   specialization  String?
   qualification   String?
   profilePicture  String?
+  department      String? 
 
   user            User      @relation(fields: [userId], references: [id])
 }
@@ -253,8 +272,8 @@ model ParentProfile {
   profilePicture  String?
 
   user            User      @relation(fields: [userId], references: [id])
- students ParentStudent[] @relation("ParentToStudent")
- }
+  students        ParentStudent[] @relation("ParentToStudent")
+}
 
 // Staff
 model StaffProfile {
@@ -269,7 +288,6 @@ model StaffProfile {
 }
 
 // Parent-Student join
-
 model ParentStudent {
   id              String           @id @default(cuid())
   studentId       String
@@ -280,12 +298,14 @@ model ParentStudent {
   student         StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   parent          User             @relation("ParentUserToParentStudent", fields: [parentUserId], references: [id], onDelete: Cascade)
 
-  relationType    String?          // e.g. "mother", "father", "guardian"
+  relationType    String?
   createdAt       DateTime         @default(now())
 
   @@index([studentId])
   @@index([parentUserId])
+  @@unique([parentUserId, studentId])
 }
+
 
 // ------------------ CLASSROOMS ------------------
 
@@ -301,7 +321,7 @@ model Classroom {
   students        StudentProfile[]
   schoolSession   SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
 
-  @@unique([schoolSessionId, name]) // ✅ makes classroom unique per session
+  @@unique([schoolSessionId, name]) // makes classroom unique per session
 }
 
 // ------------------ GRADUATION ------------------
@@ -363,11 +383,11 @@ model Assignment {
   dueDate          DateTime?
   metadata         Json?
   createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   deletedAt        DateTime?
 
   course           Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  grades Grade[] @relation("AssignmentGrades")
+  grades           Grade[]        @relation("AssignmentGrades")
   teacher          User?          @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
   students         User[]         @relation("AssignmentStudents")
   submittedAt      DateTime?
@@ -383,11 +403,11 @@ model Grade {
   letter        String?
   feedback      String?
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  assignment Assignment? @relation("AssignmentGrades", fields: [assignmentId], references: [id], onDelete: SetNull)
+  assignment    Assignment? @relation("AssignmentGrades", fields: [assignmentId], references: [id], onDelete: SetNull)
 }
 
 // ------------------ TRANSPORTATION ------------------
@@ -437,7 +457,7 @@ model Resource {
   stockQuantity    Int               @default(0)
   metadata         Json?
   createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   deletedAt        DateTime?
 
   schoolSession    SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
@@ -456,7 +476,7 @@ model Purchase {
   status           PaymentStatus       @default(PENDING)
   metadata         Json?
   createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   resource         Resource            @relation(fields: [resourceId], references: [id], onDelete: Restrict)
   buyer            User?               @relation(fields: [buyerId], references: [id], onDelete: SetNull)
@@ -473,7 +493,7 @@ model FinancialTransaction {
   status           PaymentStatus
   metadata         Json?
   createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   createdById      Int?
   updatedById      Int?
   deletedAt        DateTime?
@@ -496,7 +516,7 @@ model Payment {
   status            PaymentStatus
   metadata          Json?
   createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   transaction       FinancialTransaction? @relation("TransactionPayments", fields: [transactionId], references: [id], onDelete: SetNull)
   purchase          Purchase?            @relation("PurchasePayments", fields: [purchaseId], references: [id], onDelete: SetNull)
