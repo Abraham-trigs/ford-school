@@ -413,6 +413,9 @@ CREATE INDEX "ParentStudent_studentId_idx" ON "public"."ParentStudent"("studentI
 CREATE INDEX "ParentStudent_parentUserId_idx" ON "public"."ParentStudent"("parentUserId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ParentStudent_parentUserId_studentId_key" ON "public"."ParentStudent"("parentUserId", "studentId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Classroom_schoolSessionId_name_key" ON "public"."Classroom"("schoolSessionId", "name");
 
 -- CreateIndex
