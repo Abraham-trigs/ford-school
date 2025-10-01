@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+export default function UserLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"superadmin" | "user">("superadmin");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Optional: check if already logged in
   useEffect(() => {
     const checkAuth = async () => {
       const res = await fetch("/api/auth/me");
       if (res.ok) {
         const data = await res.json();
-        if (data.user) router.push("/dashboard");
+        if (data.user?.role !== "SUPERADMIN") router.push("/dashboard"); // redirect to user dashboard
       }
     };
     checkAuth();
@@ -31,25 +31,20 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const endpoint =
-        role === "superadmin"
-          ? "/api/auth/superadmin/login"
-          : "/api/auth/user/login";
-
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/auth/user/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         setError(data.message || "Login failed");
-        setLoading(false);
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/dashboard"); // redirect after success
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Try again.");
@@ -60,31 +55,12 @@ export default function LoginPage() {
 
   return (
     <main className="w-screen h-screen bg-secondary flex flex-col items-center justify-center px-4">
-      {/* ASTIR title */}
-      <h1 className="text-8xl font-thin text-lightGrey mb-12">.Astire</h1>
+      <h1 className="text-8xl font-thin text-lightGrey mb-12">.Astir</h1>
 
-      {/* Login box */}
       <div className="bg-deepPurple p-8 rounded-lg shadow-lg w-full max-w-md text-center">
         <h2 className="text-2xl font-display font-bold text-secondary mb-6">
-          Login
+          User / Staff Login
         </h2>
-
-        {/* Role switcher */}
-        <div className="flex justify-center mb-6 bg-accentPurple/20 rounded-full p-1">
-          {["superadmin", "user"].map((r) => (
-            <button
-              key={r}
-              onClick={() => setRole(r as "superadmin" | "user")}
-              className={`px-6 py-2 rounded-full transition-colors duration-300 font-semibold ${
-                role === r
-                  ? "bg-accentTeal text-secondary shadow-lg"
-                  : "bg-transparent text-lightGray hover:bg-accentPurple/50"
-              }`}
-            >
-              {r === "superadmin" ? "SuperAdmin" : "User / Staff"}
-            </button>
-          ))}
-        </div>
 
         {error && <p className="text-errorPink mb-4 font-semibold">{error}</p>}
 
