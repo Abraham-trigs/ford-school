@@ -130,6 +130,35 @@ enum ResourceCategory {
 
 // ------------------ MODELS ------------------
 
+// ------------------ SESSIONS ------------------
+model SuperAdminSession {
+  id           Int       @id @default(autoincrement())
+  superAdminId Int
+  token        String    @unique          // hashed refresh token or session token
+  userAgent    String?                     // optional: browser/device info
+  ipAddress    String?                     // optional
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revoked      Boolean   @default(false)
+
+  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+}
+
+//.........................USER SESSION..................................
+model UserSession {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  token        String    @unique
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revoked      Boolean   @default(false)
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
 // ------------------ SYSTEM ADMINS ------------------
 model SuperAdmin {
   id        Int            @id @default(autoincrement())
@@ -141,6 +170,7 @@ model SuperAdmin {
   updatedAt DateTime       @updatedAt
 
   sessions  SchoolSession[]
+  superAdminSessions SuperAdminSession[]
 }
 
 // ------------------ SCHOOLS / TENANTS ------------------
@@ -177,6 +207,7 @@ model User {
   updatedAt         DateTime              @updatedAt
   deletedAt         DateTime?
   department      String?
+  userSessions      UserSession[]
 
 
   // Relations
