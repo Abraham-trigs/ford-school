@@ -1,34 +1,33 @@
+"use client";
+
 import { create } from "zustand";
 
 interface UIState {
-  sidebarOpen: boolean;
-  activePath: string;
+  // Desktop
+  sidebarCollapsed: boolean;
 
-  // actions
-  toggleSidebar: () => void;
-  closeSidebar: () => void;
-  openSidebar: () => void;
-  setActivePath: (path: string) => void;
-  initializeSidebar: () => void;
+  // Mobile
+  mobileSidebarOpen: boolean;
+
+  // Window width
+  screenWidth: number;
+
+  // Actions
+  toggleSidebar: () => void;          // Desktop collapse < / >
+  toggleMobileSidebar: () => void;    // Mobile hamburger
+  setScreenWidth: (width: number) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  sidebarOpen: true,
-  activePath: "/dashboard/superadmin", // default path
+  sidebarCollapsed: false,
+  mobileSidebarOpen: false,
+  screenWidth: typeof window !== "undefined" ? window.innerWidth : 1024,
 
   toggleSidebar: () =>
-    set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+    set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
-  closeSidebar: () => set({ sidebarOpen: false }),
+  toggleMobileSidebar: () =>
+    set((state) => ({ mobileSidebarOpen: !state.mobileSidebarOpen })),
 
-  openSidebar: () => set({ sidebarOpen: true }),
-
-  setActivePath: (path: string) => set({ activePath: path }),
-
-  initializeSidebar: () => {
-    if (typeof window !== "undefined") {
-      const isMobile = window.innerWidth < 1024; // lg breakpoint
-      set({ sidebarOpen: !isMobile });
-    }
-  },
+  setScreenWidth: (width: number) => set({ screenWidth: width }),
 }));

@@ -1,7 +1,8 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
+import Navbar from "./components/Navbar";
 import { useUIStore } from "./store/uiStore";
 
 export default function SuperAdminLayout({
@@ -9,17 +10,30 @@ export default function SuperAdminLayout({
 }: {
   children: ReactNode;
 }) {
-  const { sidebarOpen, initializeSidebar } = useUIStore();
+  const { screenWidth } = useUIStore();
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Initialize sidebar open/close based on screen size
   useEffect(() => {
-    initializeSidebar();
-  }, [initializeSidebar]);
+    setIsMobile(screenWidth <= 425);
+
+    function handleResize() {
+      setIsMobile(window.innerWidth <= 425);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [screenWidth]);
 
   return (
     <div className="flex min-h-screen">
-      {sidebarOpen && <Sidebar />}
-      <div className="flex-1 flex flex-col">
+      {/* Desktop Sidebar */}
+      {!isMobile && <Sidebar />}
+
+      <div className="flex-1 flex flex-col relative">
+        {/* Navbar */}
+        <Navbar />
+
+        {/* Main content */}
         <main className="flex-1 p-6 overflow-y-auto">{children}</main>
       </div>
     </div>
