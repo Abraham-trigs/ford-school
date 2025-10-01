@@ -1,8 +1,10 @@
-// app/api/auth/superadmin/login/route.ts
+// /api/auth/superadmin/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
 import bcrypt from "bcryptjs";
-import { signJwt } from "@/lib/jwt";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,33 +21,47 @@ export async function POST(req: NextRequest) {
       where: { email },
     });
 
-    // Generic message so attackers can't enumerate emails
-    if (!superAdmin || !(await bcrypt.compare(password, superAdmin.password))) {
+    if (!superAdmin) {
       return NextResponse.json(
-        { message: "Invalid credentials" },
+        { message: "Invalid email or password" },
         { status: 401 }
       );
     }
 
-    // JWT payload
-    const token = signJwt({ sub: superAdmin.id, role: "SUPERADMIN" });
+    const passwordMatches = await bcrypt.compare(password, superAdmin.password);
 
-    const response = NextResponse.json(
-      { message: "Login successful", user: { email: superAdmin.email, name: superAdmin.name } },
-      { status: 200 }
+    if (!passwordMatches) {
+      return NextResponse.json(
+        { message: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
+
+    const token = jwt.sign(
+      {
+        id: superAdmin.id,
+        name: superAdmin.name,
+        email: superAdmin.email,
+        role: "SUPERADMIN",
+      },
+      JWT_SECRET,
+      { expiresIn: "8h" } // adjust as needed
     );
 
-    response.cookies.set("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+    return NextResponse.json({
+      message: "Login successful",
+      token,
+      superAdmin: {
+        id: superAdmin.id,
+        name: superAdmin.name,
+        email: superAdmin.email,
+      },
     });
-
-    return response;
   } catch (err) {
-    console.error("SuperAdmin login error:", err);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error("Login error:", err);
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
