@@ -1,10 +1,8 @@
-// app/dashboard/components/Sidebar.tsx
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { useUIStore } from "../store/uiStore";
 
 const menuItems = [
   {
@@ -70,24 +70,62 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const {
+    sidebarOpen,
+    sidebarCollapsed,
+    toggleSidebar,
+    closeSidebar,
+    activePath,
+    setActivePath,
+  } = useUIStore();
+
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // 🔥 Sync store with current pathname
+  useEffect(() => {
+    if (pathname) setActivePath(pathname);
+  }, [pathname, setActivePath]);
+
+  // 🔥 Click outside to close (only on mobile)
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(e.target as Node) &&
+        window.innerWidth < 1024 // only for < lg
+      ) {
+        closeSidebar();
+      }
+    }
+    if (sidebarOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [sidebarOpen, closeSidebar]);
+
+  // Sidebar hidden on mobile unless open
+  if (!sidebarOpen && window.innerWidth < 1024) return null;
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? "80px" : "260px" }}
-      className="bg-deepPurple text-secondary h-screen p-4 flex flex-col shadow-lg relative"
+      ref={sidebarRef}
+      animate={{ width: sidebarCollapsed ? "80px" : "260px" }}
+      className={`bg-deepPurple text-secondary h-screen p-4 flex flex-col shadow-lg relative z-50
+        ${window.innerWidth < 1024 ? "fixed top-0 left-0 h-full" : ""}`}
     >
-      {/* Collapse Button */}
+      {/* Collapse Button (desktop only) */}
       <button
-        onClick={() => setCollapsed((prev) => !prev)}
-        className="absolute -right-3 top-6 bg-accentTeal text-deepPurple p-1 rounded-full shadow hover:bg-accentPurple transition-colors"
+        onClick={toggleSidebar}
+        className="absolute -right-3 top-6 bg-accentTeal text-deepPurple p-1 rounded-full shadow hover:bg-accentPurple transition-colors hidden lg:block"
       >
-        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        {sidebarCollapsed ? (
+          <ChevronRight size={18} />
+        ) : (
+          <ChevronLeft size={18} />
+        )}
       </button>
 
       {/* Logo / Title */}
       <motion.h2
-        animate={{ opacity: collapsed ? 0 : 1 }}
+        animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
         className="text-2xl font-display font-bold mb-8 whitespace-nowrap"
       >
         SuperAdmin
@@ -97,12 +135,13 @@ export default function Sidebar() {
       <nav className="flex flex-col gap-2 mt-6">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = activePath === item.href;
 
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => closeSidebar()} // auto-close on mobile navigation
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${
                 isActive
                   ? "bg-secondary text-deepPurple font-semibold shadow-md"
@@ -110,7 +149,7 @@ export default function Sidebar() {
               }`}
             >
               <Icon size={20} />
-              {!collapsed && (
+              {!sidebarCollapsed && (
                 <motion.span
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
