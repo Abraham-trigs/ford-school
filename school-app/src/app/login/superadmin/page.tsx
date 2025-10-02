@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSuperAdmin } from "@/hooks/useSuperAdmin"; // ✅ import your store hook
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
+  const { setSuperAdmin } = useSuperAdmin(); // ✅ state setter
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,8 +18,9 @@ export default function SuperAdminLoginPage() {
       const res = await fetch("/api/auth/me");
       if (res.ok) {
         const data = await res.json();
-        if (data.user?.role === "SUPERADMIN")
+        if (data.user?.role === "SUPERADMIN") {
           router.push("/dashboard/superadmin");
+        }
       }
     };
     checkAuth();
@@ -45,7 +48,24 @@ export default function SuperAdminLoginPage() {
         return;
       }
 
-      router.push("/dashboard/superadmin/dashboard/"); // redirect after success
+      // ✅ Save to Zustand store
+      setSuperAdmin({
+        superAdmin: data.superAdmin,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+      });
+
+      // ✅ Persist tokens (optional now, useful for reloads)
+      localStorage.setItem(
+        "superadmin_tokens",
+        JSON.stringify({
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        })
+      );
+
+      // ✅ Redirect to dashboard
+      router.push("/dashboard/superadmin");
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Try again.");
