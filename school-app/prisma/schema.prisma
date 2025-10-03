@@ -149,6 +149,7 @@ model UserSession {
   id           Int       @id @default(autoincrement())
   userId       Int
   token        String    @unique
+  refreshToken String   @unique
   userAgent    String?
   ipAddress    String?
   createdAt    DateTime  @default(now())
