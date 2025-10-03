@@ -2,30 +2,52 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin"; // ✅ import your store hook
+import { useSuperAdminStore } from "@/app/dashboard/superadmin/dashboard/store/superAdminStore";
+import { Eye, EyeOff } from "lucide-react";
+import LoaderModal from "@/app/dashboard/superadmin/dashboard/components/LoaderModal";
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
-  const { setSuperAdmin } = useSuperAdmin(); // ✅ state setter
+  const { setSuperAdmin } = useSuperAdminStore();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // initial refresh
+  const [authLoading, setAuthLoading] = useState(false);
 
-  // Optional: check if already logged in
+  // ✅ One-time session refresh check
   useEffect(() => {
-    const checkAuth = async () => {
-      const res = await fetch("/api/auth/me");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user?.role === "SUPERADMIN") {
-          router.push("/dashboard/superadmin");
+    const refreshSession = async () => {
+      try {
+        const refreshToken = localStorage.getItem("superAdminRefreshToken");
+        if (!refreshToken) return setLoading(false);
+
+        const res = await fetch("/api/auth/superadmin/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setSuperAdmin(data.superAdmin, data.accessToken);
+          router.replace("/dashboard/superadmin/dashboard");
+        } else {
+          localStorage.removeItem("superAdminRefreshToken");
         }
+      } catch (err) {
+        console.error("Session refresh failed", err);
+      } finally {
+        setLoading(false);
       }
     };
-    checkAuth();
-  }, [router]);
 
+    refreshSession();
+  }, [router, setSuperAdmin]);
+
+  // ✅ Handle login
   const handleLogin = async () => {
     setError("");
     if (!email || !password) {
@@ -33,7 +55,7 @@ export default function SuperAdminLoginPage() {
       return;
     }
 
-    setLoading(true);
+    setAuthLoading(true);
     try {
       const res = await fetch("/api/auth/superadmin/login", {
         method: "POST",
@@ -48,31 +70,29 @@ export default function SuperAdminLoginPage() {
         return;
       }
 
-      // ✅ Save to Zustand store
-      setSuperAdmin({
-        superAdmin: data.superAdmin,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      // ✅ Save in-memory
+      setSuperAdmin(data.superAdmin, data.accessToken);
 
-      // ✅ Persist tokens (optional now, useful for reloads)
-      localStorage.setItem(
-        "superadmin_tokens",
-        JSON.stringify({
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-        })
-      );
+      // ✅ Persist refresh token
+      localStorage.setItem("superAdminRefreshToken", data.refreshToken);
 
-      // ✅ Redirect to dashboard
-      router.push("/dashboard/superadmin");
+      router.replace("/dashboard/superadmin/dashboard");
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Try again.");
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
     }
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleLogin();
+  };
+
+  // ✅ LoaderModal for both initial session check & auth loading
+  if (loading || authLoading) {
+    return <LoaderModal isVisible text="Logging in..." />;
+  }
 
   return (
     <main className="w-screen h-screen bg-secondary flex flex-col items-center justify-center px-4">
@@ -91,22 +111,33 @@ export default function SuperAdminLoginPage() {
           className="w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
 
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full mb-6 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="relative w-full mb-6">
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="Password"
+            className="w-full bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-3 flex items-center text-lightGray hover:text-accentTeal"
+          >
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
 
         <button
           onClick={handleLogin}
-          disabled={loading}
+          disabled={authLoading}
           className="w-full px-6 py-3 bg-accentTeal text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
         >
-          {loading ? "Logging in..." : "Login"}
+          Login
         </button>
       </div>
     </main>

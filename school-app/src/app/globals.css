@@ -59,3 +59,18 @@ input, textarea {
 .bg-lightGray { background-color: #E0E0E0; }
 .bg-errorPink { background-color: #CF6679; }
 .bg-variantPurple { background-color: #BB86FC; }
+
+
+/* Custom animations */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}

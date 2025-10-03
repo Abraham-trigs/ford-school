@@ -1,7 +1,7 @@
-// store/useSuperAdmin.ts
+// store/superAdminStore.ts
 import { create } from "zustand";
 
-interface SuperAdmin {
+export interface SuperAdmin {
   id: number;
   name: string;
   email: string;
@@ -10,66 +10,61 @@ interface SuperAdmin {
 interface SuperAdminState {
   superAdmin: SuperAdmin | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
-  setSuperAdmin: (payload: {
-    superAdmin: SuperAdmin;
-    accessToken: string;
-    refreshToken: string;
-  }) => void;
+  setSuperAdmin: (superAdmin: SuperAdmin, accessToken: string) => void;
   logout: () => void;
+  hydrateSuperAdmin: () => Promise<void>;
 }
 
 export const useSuperAdminStore = create<SuperAdminState>((set) => ({
   superAdmin: null,
   accessToken: null,
-  refreshToken: null,
   isAuthenticated: false,
 
-  setSuperAdmin: ({ superAdmin, accessToken, refreshToken }) => {
+  // Set superadmin info and access token in memory
+  setSuperAdmin: (superAdmin, accessToken) =>
     set(() => ({
       superAdmin,
       accessToken,
-      refreshToken,
       isAuthenticated: true,
-    }));
+    })),
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("superAdmin", JSON.stringify(superAdmin));
-      localStorage.setItem("superAdminAccessToken", accessToken);
-      localStorage.setItem("superAdminRefreshToken", refreshToken);
-    }
-  },
-
-  logout: () => {
-    set(() => ({
-      superAdmin: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-    }));
-
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("superAdmin");
-      localStorage.removeItem("superAdminAccessToken");
+  // Logout: clear store and refresh token
+  logout: () =>
+    set(() => {
       localStorage.removeItem("superAdminRefreshToken");
+      return {
+        superAdmin: null,
+        accessToken: null,
+        isAuthenticated: false,
+      };
+    }),
+
+  // Hydrate store from refresh token
+  hydrateSuperAdmin: async () => {
+    const refreshToken = localStorage.getItem("superAdminRefreshToken");
+    if (!refreshToken) return;
+
+    try {
+      const res = await fetch("/api/auth/superadmin/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) throw new Error("Refresh failed");
+
+      const data = await res.json();
+
+      set({
+        superAdmin: data.superAdmin,
+        accessToken: data.accessToken,
+        isAuthenticated: true,
+      });
+    } catch (err) {
+      console.warn("Session restore failed", err);
+      localStorage.removeItem("superAdminRefreshToken");
+      set({ superAdmin: null, accessToken: null, isAuthenticated: false });
     }
   },
 }));
-
-// ✅ Hydrate from localStorage
-export const hydrateSuperAdmin = () => {
-  if (typeof window === "undefined") return;
-
-  const storedAdmin = localStorage.getItem("superAdmin");
-  const storedAccessToken = localStorage.getItem("superAdminAccessToken");
-  const storedRefreshToken = localStorage.getItem("superAdminRefreshToken");
-
-  if (storedAdmin && storedAccessToken && storedRefreshToken) {
-    useSuperAdminStore.getState().setSuperAdmin({
-      superAdmin: JSON.parse(storedAdmin),
-      accessToken: storedAccessToken,
-      refreshToken: storedRefreshToken,
-    });
-  }
-};

@@ -3,7 +3,7 @@ import "./globals.css";
 import { ReactNode } from "react";
 
 export const metadata = {
-  title: "Astir",
+  title: ".Astir",
   description: "Astir School Management System",
 };
 
