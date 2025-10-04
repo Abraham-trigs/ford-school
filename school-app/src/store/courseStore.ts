@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiGetCourses, apiGetCourseById } from "@/lib/api/courses";
+import { apiGetCourses, apiGetCourseById } from "@/lib/api/course";
 
 export interface Course {
   id: number;

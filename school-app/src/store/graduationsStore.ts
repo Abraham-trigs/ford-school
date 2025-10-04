@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiGetGraduations, apiGetGraduationById } from "@/lib/api/graduations";
+import { apiGetGraduations, apiGetGraduationById } from "@/lib/api/graduationStore";
 
 export interface Graduation {
   id: number;
