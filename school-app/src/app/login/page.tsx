@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, KeyboardEvent } from "react";
+import { useState, KeyboardEvent } from "react";
 import { useAuthStore } from "@/store/authStore";
 import LoaderModal from "@/components/layout/LoaderModal";
 import { Eye, EyeOff } from "lucide-react";
@@ -12,45 +12,36 @@ export default function LoginPage() {
   const {
     user,
     loading: authLoading,
-    fetchUser,
     login,
   } = useAuthStore((state) => ({
     user: state.user,
     loading: state.loading,
-    fetchUser: state.fetchUser,
     login: state.login,
   }));
 
-  const [hydrated, setHydrated] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Hydrate profile on mount
-  useEffect(() => {
-    if (!hydrated) {
-      fetchUser().finally(() => setHydrated(true));
-    }
-  }, [hydrated, fetchUser]);
-
-  // Redirect if logged in
-  useEffect(() => {
-    if (hydrated && user) router.replace("/dashboard/superadmin/dashboard");
-  }, [hydrated, user, router]);
+  // Redirect if already logged in
+  if (user) router.replace("/dashboard");
 
   const handleLogin = async () => {
-    if (loading) return;
-    setLoading(true);
+    if (localLoading || authLoading) return;
+    setLocalLoading(true);
+    setError("");
 
     try {
       await login(email.trim(), password);
       toast.success("Logged in successfully!");
       setPassword("");
     } catch (err: any) {
+      setError(err?.message || "Login failed");
       toast.error(err?.message || "Login failed");
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
   };
 
@@ -58,7 +49,7 @@ export default function LoginPage() {
     if (e.key === "Enter") handleLogin();
   };
 
-  if (loading || authLoading || !hydrated)
+  if (localLoading || authLoading)
     return <LoaderModal isVisible text="Logging in..." />;
 
   return (
@@ -75,17 +66,21 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="Email"
-            className="w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
+            className={`w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple ${
+              error ? "border border-red-500" : ""
+            }`}
             value={email}
             onChange={(e) => setEmail(e.target.value.trimStart())}
             onKeyDown={handleKeyDown}
           />
 
-          <div className="relative w-full mb-6">
+          <div className="relative w-full mb-2">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
-              className="w-full bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
+              className={`w-full bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10 ${
+                error ? "border border-red-500" : ""
+              }`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -99,9 +94,11 @@ export default function LoginPage() {
             </button>
           </div>
 
+          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
           <button
             onClick={handleLogin}
-            disabled={authLoading || loading}
+            disabled={localLoading || authLoading}
             className="w-full px-6 py-3 bg-accentTeal text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
           >
             Login
