@@ -1,73 +1,65 @@
-// /api/sessions/login.ts
+// app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma/prisma";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { prisma } from "@/lib/prisma/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
-const JWT_EXPIRES_IN = 60 * 60; // 1h in seconds
-const REFRESH_EXPIRES_IN = 60 * 60 * 24 * 7; // 7 days
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
     if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email and password required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "Email and password required" }, { status: 400 });
     }
 
+    // 1️⃣ Fetch the User
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { memberships: true },
+      include: { memberships: true }, // includes UserSchoolSession(s)
     });
 
-    if (!user || user.deletedAt) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    if (!user || user.memberships.length === 0) {
+      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    const validPassword = await bcrypt.compare(password, user.password || "");
-    if (!validPassword) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    // 2️⃣ Pick the active UserSchoolSession (for current login)
+    const activeSession = user.memberships.find((s) => s.active);
+    if (!activeSession) {
+      return NextResponse.json({ message: "No active session for this user" }, { status: 403 });
     }
 
-    const roles = user.memberships.map((m) => m.role);
-    const payload = { userId: user.id, roles };
+    // 3️⃣ Compare passwords
+    const isValid = await bcrypt.compare(password, activeSession.password);
+    if (!isValid) {
+      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    }
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-
-    // Save session
-    const expiresAt = new Date(Date.now() + REFRESH_EXPIRES_IN * 1000);
-    await prisma.userSession.create({
-      data: { userId: user.id, token, refreshToken: token, expiresAt },
-    });
-
-    // Set cookie
-    const res = NextResponse.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        profilePicture: user.profilePicture,
-        roles,
+    // 4️⃣ Generate JWT
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        role: activeSession.role,
+        schoolSessionId: activeSession.schoolSessionId,
       },
-    });
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
+    // 5️⃣ Set cookie
+    const res = NextResponse.json({ message: "Login successful" });
     res.cookies.set({
       name: "token",
       value: token,
       httpOnly: true,
       path: "/",
-      sameSite: "lax",
-      maxAge: JWT_EXPIRES_IN,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
     return res;
-  } catch (err: any) {
+  } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
 }
