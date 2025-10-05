@@ -17,18 +17,10 @@ export default function HomePage() {
         <div className="flex flex-col gap-4">
           {/* SuperAdmin Login */}
           <button
-            onClick={() => router.push("/login/superadmin")}
+            onClick={() => router.push("/login")}
             className="w-full px-6 py-3  text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300"
           >
-            Login as SuperAdmin
-          </button>
-
-          {/* User / Staff Login */}
-          <button
-            onClick={() => router.push("/login/user")}
-            className="w-full px-6 py-3 bg-accentPurple text-secondary rounded-lg font-semibold hover:bg-accentTeal transition-colors duration-300"
-          >
-            Login as User / Staff
+            Login
           </button>
         </div>
       </div>
