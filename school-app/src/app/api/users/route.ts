@@ -59,7 +59,6 @@ export async function GET(req: NextRequest) {
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
 
     const whereClause: any = { deletedAt: null };
-
     if (emailFilter)
       whereClause.email = { contains: emailFilter, mode: "insensitive" };
 
