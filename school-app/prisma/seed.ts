@@ -1,175 +1,284 @@
 // prisma/seed.ts
-import { PrismaClient, RoleType, GradeLevel, StudentStatus } from "@prisma/client";
-import * as bcrypt from "bcryptjs";
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
-const superAdminPassword = await bcrypt.hash("password123", 10);
-
 async function main() {
-  // 1️⃣ SuperAdmin
-  const superAdmin = await prisma.superAdmin.upsert({
-    where: { email: "superadmin@astir.com" },
-    update: {},
-    create: {
-      email: "superadmin@astir.com",
-      name: "Super Admin",
-      password: superAdminPassword,
+  const hashedPassword = await bcrypt.hash("SuperSecret123!", 12);
+
+  // ====== SuperAdmin ======
+  const superAdminUser = await prisma.user.create({
+    data: {
+      email: "superadmin@example.com",
+      fullName: "Super Admin",
+      role: "SUPERADMIN",
+      humanId: "SYS-SUPERADMIN",
+      profilePicture: "https://via.placeholder.com/150",
     },
   });
-  console.log(`✅ SuperAdmin ready: ${superAdmin.email}`);
 
-  // 2️⃣ Default SchoolSession
-  const defaultSession = await prisma.schoolSession.upsert({
-    where: { slug: "default-session" },
-    update: {},
-    create: {
-      name: "Default Session",
-      slug: "default-session",
-      startDate: new Date(),
-      endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
-      superAdminId: superAdmin.id,
-    },
-  });
-  console.log(`✅ SchoolSession ready: ${defaultSession.name}`);
-
-  // 3️⃣ Helper function for users
-  const passwordHash = await bcrypt.hash("password123", 10);
-
-  async function createUser({
-    email,
-    fullName,
-    role,
-    humanId,
-    profileData,
-    include,
-  }: {
-    email: string;
-    fullName: string;
-    role: string;
-    humanId: string;
-    profileData?: any;
-    include?: any;
-  }) {
-    return prisma.user.upsert({
-      where: { email },
-      update: {},
-      create: {
-        email,
-        fullName,
-        memberships: {
-          create: {
-            schoolSessionId: defaultSession.id,
-            role,
-            email,
-            password: passwordHash,
-            humanId,
+  const superAdmin = await prisma.superAdmin.create({
+    data: {
+      userId: superAdminUser.id,
+      metadata: {
+        onboardingCompleted: true,
+        department: "System",
+        notes: "Initial superadmin account",
+      },
+      sessions: {
+        create: [
+          {
+            token: "initial-superadmin-session-token",
+            ipAddress: "127.0.0.1",
+            userAgent: "seed-script",
+            expiresAt: new Date(new Date().getTime() + 1000 * 60 * 60 * 24 * 365),
           },
-        },
-        ...profileData,
+        ],
       },
-      include,
-    });
-  }
-
-  // 4️⃣ Staff
-  const staff = await createUser({
-    email: "staff@astir.com",
-    fullName: "Staff Member",
-    role: RoleType.ADMIN,
-    humanId: "EMP-0001",
-    profileData: {
-      staffProfile: {
-        create: {
-          employeeId: "EMP-0001",
-          hireDate: new Date(),
-          department: "Administration",
-        },
+      schoolSessions: {
+        create: [
+          {
+            name: "Default School Session",
+            slug: "default-school-session",
+            startDate: new Date("2025-09-01"),
+            endDate: new Date("2026-06-30"),
+            metadata: { seeded: true },
+          },
+        ],
       },
     },
-    include: { staffProfile: true },
+    include: { schoolSessions: true },
   });
-  console.log(`✅ Staff ready: ${staff.email}`);
 
-  // 5️⃣ Teacher
-  const teacher = await createUser({
-    email: "teacher@astir.com",
-    fullName: "John Teacher",
-    role: RoleType.TEACHER,
-    humanId: "TCH-0001",
-    profileData: {
+  // ====== UserSchoolSession ======
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: "SYS-SUPERADMIN",
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      userId: superAdminUser.id,
+      email: superAdminUser.email,
+      password: hashedPassword,
+      role: "SUPERADMIN",
+      active: true,
+    },
+  });
+
+  // ====== Teacher ======
+  const teacherUser = await prisma.user.create({
+    data: {
+      email: "teacher@example.com",
+      fullName: "John Teacher",
+      role: "TEACHER",
+      humanId: "SCH-TEACHER1",
+      profilePicture: "https://via.placeholder.com/150",
       teacherProfile: {
         create: {
-          employeeId: "TCH-0001",
-          hireDate: new Date(),
+          employeeId: "T-001",
+          hireDate: new Date("2020-01-01"),
           department: "Mathematics",
+          qualification: "MSc Mathematics",
+          specialization: "Algebra",
         },
       },
     },
-    include: { teacherProfile: true },
   });
-  console.log(`✅ Teacher ready: ${teacher.email}`);
 
-  // 6️⃣ Student
-  const student = await createUser({
-    email: "student@astir.com",
-    fullName: "Jane Student",
-    role: RoleType.STUDENT,
-    humanId: "STD-0001",
-    profileData: {
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: "SCH-TEACHER1",
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      userId: teacherUser.id,
+      email: teacherUser.email,
+      password: hashedPassword,
+      role: "TEACHER",
+      active: true,
+    },
+  });
+
+  // ====== Student ======
+  const studentUser = await prisma.user.create({
+    data: {
+      email: "student@example.com",
+      fullName: "Jane Student",
+      role: "STUDENT",
+      humanId: "SCH-STUDENT1",
+      profilePicture: "https://via.placeholder.com/150",
       studentProfile: {
         create: {
-          admissionNumber: "STD-0001",
-          admissionDate: new Date(),
-          currentGrade: GradeLevel.GRADE_10,
-          status: StudentStatus.ACTIVE,
+          admissionNumber: "A-001",
+          admissionDate: new Date("2025-09-01"),
+          dateOfBirth: new Date("2012-05-10"),
+          gender: "Female",
+          currentGrade: "GRADE_6",
+          status: "ACTIVE",
         },
       },
     },
-    include: { studentProfile: true },
   });
-  console.log(`✅ Student ready: ${student.email}`);
 
-  // 7️⃣ Parent
-  const parent = await createUser({
-    email: "parent@astir.com",
-    fullName: "Paul Parent",
-    role: RoleType.PARENT,
-    humanId: "PRT-0001",
-    profileData: {
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: "SCH-STUDENT1",
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      userId: studentUser.id,
+      email: studentUser.email,
+      password: hashedPassword,
+      role: "STUDENT",
+      active: true,
+    },
+  });
+
+  // ====== Parent ======
+  const parentUser = await prisma.user.create({
+    data: {
+      email: "parent@example.com",
+      fullName: "Mary Parent",
+      role: "PARENT",
+      humanId: "SCH-PARENT1",
+      profilePicture: "https://via.placeholder.com/150",
       parentProfile: {
         create: {
-          phoneNumber: "123-456-7890",
-          address: "123 Parent Street",
+          occupation: "Engineer",
+          phoneNumber: "+123456789",
+          address: "123 Main St",
+          profilePicture: "https://via.placeholder.com/150",
         },
       },
     },
-    include: { parentProfile: true },
   });
-  console.log(`✅ Parent ready: ${parent.email}`);
 
-  // 8️⃣ Link Parent ↔ Student
-  await prisma.parentStudent.upsert({
-    where: {
-      parentUserId_studentId: {
-        parentUserId: parent.id,
-        studentId: student.studentProfile.id,
-      },
-    },
-    update: {},
-    create: {
-      parentUserId: parent.id,
-      studentId: student.studentProfile.id,
-      parentProfileId: parent.parentProfile.id,
-      relationType: "Father",
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: "SCH-PARENT1",
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      userId: parentUser.id,
+      email: parentUser.email,
+      password: hashedPassword,
+      role: "PARENT",
+      active: true,
     },
   });
-  console.log(`✅ Linked Parent ${parent.email} to Student ${student.email}`);
+
+  // ====== Link Parent-Student ======
+  await prisma.parentStudent.create({
+    data: {
+      studentId: studentUser.studentProfile!.id,
+      parentProfileId: parentUser.parentProfile!.id,
+      parentUserId: parentUser.id,
+      relationType: "Mother",
+    },
+  });
+
+  // ====== Classroom ======
+  const classroom = await prisma.classroom.create({
+    data: {
+      name: "Grade 6A",
+      gradeLevel: "GRADE_6",
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      students: { connect: [{ id: studentUser.studentProfile!.id }] },
+    },
+  });
+
+  // ====== Course ======
+  const course = await prisma.course.create({
+    data: {
+      name: "Mathematics",
+      code: "MATH101",
+      description: "Basic Math course",
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      teacherId: teacherUser.id,
+      students: { connect: [{ id: studentUser.id }] },
+    },
+  });
+
+  // ====== Assignment ======
+  const assignment = await prisma.assignment.create({
+    data: {
+      title: "Algebra Homework",
+      courseId: course.id,
+      teacherId: teacherUser.id,
+      type: "HOMEWORK",
+      dueDate: new Date("2025-10-15"),
+    },
+  });
+
+  // ====== Grade ======
+  await prisma.grade.create({
+    data: {
+      userId: studentUser.id,
+      courseId: course.id,
+      assignmentId: assignment.id,
+      value: 95,
+      maxValue: 100,
+      letter: "A",
+      feedback: "Excellent work!",
+    },
+  });
+
+  // ====== Transportation ======
+  const transportation = await prisma.transportation.create({
+    data: {
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      routeName: "Route A",
+      vehicleType: "BUS",
+      vehicleNumber: "BUS-001",
+      driverName: "Driver John",
+      capacity: 40,
+    },
+  });
+
+  await prisma.transportStop.createMany({
+    data: [
+      { transportationId: transportation.id, name: "Stop 1", orderIndex: 1, lat: 5.6037, lng: -0.1870 },
+      { transportationId: transportation.id, name: "Stop 2", orderIndex: 2, lat: 5.6147, lng: -0.2020 },
+    ],
+  });
+
+  // ====== Resource ======
+  const resource = await prisma.resource.create({
+    data: {
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      sku: "RES-001",
+      name: "Math Textbook",
+      category: "BOOK",
+      price: 25,
+      stockQuantity: 50,
+    },
+  });
+
+  // ====== Purchase ======
+  const purchase = await prisma.purchase.create({
+    data: {
+      resourceId: resource.id,
+      buyerId: parentUser.id,
+      quantity: 1,
+      unitPrice: 25,
+      totalAmount: 25,
+      currency: "USD",
+      status: "COMPLETED",
+    },
+  });
+
+  // ====== Financial Transaction ======
+  await prisma.financialTransaction.create({
+    data: {
+      schoolSessionId: superAdmin.schoolSessions[0].id,
+      type: "FEE_PAYMENT",
+      amount: 25,
+      currency: "USD",
+      status: "COMPLETED",
+      createdById: superAdminUser.id,
+      updatedById: superAdminUser.id,
+    },
+  });
+
+  console.log("✅ Database seeded with SuperAdmin, Users, Profiles, Classes, Courses, Assignments, Grades, Transportation, Resources, Purchases, and Financials.");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Error seeding database:", e);
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {

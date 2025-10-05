@@ -1,80 +1,80 @@
-"use client";
-
+// store/authStore.ts
 import { create } from "zustand";
-import { toast } from "react-hot-toast";
-
-export interface User {
-  id: number;
-  email: string;
-  fullName: string;
-  roles: string[];
-}
+import { apiGetProfile, Profile } from "@/lib/api/profile";
 
 interface AuthState {
-  user: User | null;
+  user: Profile | null;
   loading: boolean;
-  isAuthenticated: boolean;
+  error: string | null;
+  isLoggedIn: boolean;
 
-  hydrate: () => Promise<void>;
+  // Actions
+  fetchUser: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: () => void;
+  hasRole: (role: string) => boolean;
+  getMembershipRoles: () => string[];
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  loading: true,
-  isAuthenticated: false,
+  loading: false,
+  error: null,
+  isLoggedIn: false,
 
-  hydrate: async () => {
-    set({ loading: true });
+  fetchUser: async () => {
+    set({ loading: true, error: null });
     try {
-      const res = await fetch("/api/sessions/profile");
-      if (!res.ok) {
-        set({ user: null, isAuthenticated: false });
-        return;
-      }
-      const data = await res.json();
-      set({ user: data.data, isAuthenticated: true });
-    } catch (err) {
-      console.error("Failed to hydrate auth:", err);
-      set({ user: null, isAuthenticated: false });
-    } finally {
-      set({ loading: false });
+      const profile = await apiGetProfile();
+      set({
+        user: profile,
+        isLoggedIn: !!profile,
+        loading: false,
+      });
+    } catch (err: any) {
+      set({ user: null, isLoggedIn: false, loading: false, error: err.message });
     }
   },
 
-  login: async (email, password) => {
-    set({ loading: true });
+  login: async (email: string, password: string) => {
+    set({ loading: true, error: null });
     try {
       const res = await fetch("/api/sessions/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Login failed");
 
-      set({ user: data.data.user, isAuthenticated: true });
-      toast.success("Login successful!");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Login failed");
+      }
+
+      // After login, fetch profile
+      await get().fetchUser();
     } catch (err: any) {
-      set({ user: null, isAuthenticated: false });
-      toast.error(err.message || "Login failed");
+      set({ error: err.message });
       throw err;
     } finally {
       set({ loading: false });
     }
   },
 
-  logout: async () => {
-    set({ loading: true });
-    try {
-      await fetch("/api/sessions/logout", { method: "POST" });
-      set({ user: null, isAuthenticated: false });
-      toast.success("Logged out!");
-    } catch (err) {
-      console.error("Logout error:", err);
-    } finally {
-      set({ loading: false });
-    }
+  logout: () => {
+    set({ user: null, isLoggedIn: false });
+    fetch("/api/sessions/logout", { method: "POST", credentials: "include" });
+  },
+
+  hasRole: (role: string) => {
+    const { user } = get();
+    if (!user) return false;
+    return user.memberships?.some((m) => m.role === role) ?? false;
+  },
+
+  getMembershipRoles: () => {
+    const { user } = get();
+    if (!user) return [];
+    return user.memberships?.map((m) => m.role) ?? [];
   },
 }));

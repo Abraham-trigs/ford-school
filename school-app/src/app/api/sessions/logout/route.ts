@@ -1,31 +1,30 @@
+// /api/sessions/logout.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const token = req.cookies.get("token")?.value;
+
+    if (token) {
+      await prisma.userSession.updateMany({
+        where: { token },
+        data: { revoked: true },
+      });
     }
 
-    const token = authHeader.split(" ")[1];
-
-    const session = await prisma.userSession.findFirst({
-      where: { token, revoked: false },
+    const res = NextResponse.json({ message: "Logged out" });
+    res.cookies.set({
+      name: "token",
+      value: "",
+      path: "/",
+      httpOnly: true,
+      maxAge: 0,
     });
 
-    if (!session) {
-      return NextResponse.json({ error: "Session not found or already revoked" }, { status: 404 });
-    }
-
-    await prisma.userSession.update({
-      where: { id: session.id },
-      data: { revoked: true },
-    });
-
-    return NextResponse.json({ message: "Logged out successfully" });
+    return res;
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Logout failed" }, { status: 500 });
   }
 }

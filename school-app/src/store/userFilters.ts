@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { UserFilters } from "@/stores/useUserStore";
+import type { UserFilters } from "@/store/userFilters";
 
 /* ------------------------- Extended Filters Contract ------------------------- */
 interface UserFilterState

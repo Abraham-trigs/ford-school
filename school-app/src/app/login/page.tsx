@@ -5,35 +5,48 @@ import { useAuthStore } from "@/store/authStore";
 import LoaderModal from "@/components/layout/LoaderModal";
 import { Eye, EyeOff } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
-import { useRedirectOnAuth } from "@/lib/hooks/RedirectOnAuth";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
   const {
+    user,
     loading: authLoading,
-    hydrate,
+    fetchUser,
     login,
   } = useAuthStore((state) => ({
+    user: state.user,
     loading: state.loading,
-    hydrate: state.hydrate,
+    fetchUser: state.fetchUser,
     login: state.login,
   }));
 
+  const [hydrated, setHydrated] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Hydrate profile on mount
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    if (!hydrated) {
+      fetchUser().finally(() => setHydrated(true));
+    }
+  }, [hydrated, fetchUser]);
 
-  useRedirectOnAuth();
+  // Redirect if logged in
+  useEffect(() => {
+    if (hydrated && user) router.replace("/dashboard/superadmin/dashboard");
+  }, [hydrated, user, router]);
 
   const handleLogin = async () => {
+    if (loading) return;
     setLoading(true);
+
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       toast.success("Logged in successfully!");
+      setPassword("");
     } catch (err: any) {
       toast.error(err?.message || "Login failed");
     } finally {
@@ -45,15 +58,15 @@ export default function LoginPage() {
     if (e.key === "Enter") handleLogin();
   };
 
-  if (loading || authLoading) {
+  if (loading || authLoading || !hydrated)
     return <LoaderModal isVisible text="Logging in..." />;
-  }
 
   return (
     <>
       <Toaster position="top-right" />
       <main className="w-screen h-screen bg-secondary flex flex-col items-center justify-center px-4">
         <h1 className="text-8xl font-thin text-lightGrey mb-12">.Astire</h1>
+
         <div className="bg-deepPurple p-8 rounded-lg shadow-lg w-full max-w-md text-center">
           <h2 className="text-2xl font-display font-bold text-secondary mb-6">
             Login
@@ -64,7 +77,7 @@ export default function LoginPage() {
             placeholder="Email"
             className="w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.trimStart())}
             onKeyDown={handleKeyDown}
           />
 

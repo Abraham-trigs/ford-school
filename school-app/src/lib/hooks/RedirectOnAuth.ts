@@ -1,27 +1,35 @@
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/authStore";
+"use client";
 
-const ROLE_ROUTES: Record<string, string> = {
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useAuthStore, User } from "@/store/authStore";
+
+// Map singular roles to their dashboard routes
+const ROLE_ROUTES: Record<User["role"], string> = {
   SUPERADMIN: "/dashboard/superadmin/dashboard",
   ADMIN: "/dashboard/admin/dashboard",
   TEACHER: "/dashboard/teacher/dashboard",
   STUDENT: "/dashboard/student/dashboard",
-  DEFAULT: "/dashboard",
+  PARENT: "/dashboard/parent/dashboard",
 };
 
 export function useRedirectOnAuth() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading } = useAuthStore((state) => ({
     user: state.user,
     loading: state.loading,
   }));
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) return;
+    // Wait until loading finishes or user is not authenticated
+    if (loading || !user) return;
 
-    const role = user.roles.find((r) => ROLE_ROUTES[r]);
-    router.replace(ROLE_ROUTES[role!] || ROLE_ROUTES.DEFAULT);
-  }, [user, loading, router]);
+    const targetRoute = ROLE_ROUTES[user.role] ?? "/dashboard";
+
+    // Only redirect if we're not already on the target route
+    if (pathname !== targetRoute) {
+      router.replace(targetRoute);
+    }
+  }, [user, loading, pathname, router]);
 }

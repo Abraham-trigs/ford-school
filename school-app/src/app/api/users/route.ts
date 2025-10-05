@@ -1,3 +1,4 @@
+// /api/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
 import { authenticate } from "@/lib/auth";
@@ -29,6 +30,7 @@ const profileRoles: Record<string, string> = {
   CLEANER: "staffProfile",
   SECURITY: "staffProfile",
   MAINTENANCE: "staffProfile",
+  SUPERADMIN: "superAdminMeta",
 };
 
 // ✅ Zod validation schema for user creation
@@ -53,14 +55,13 @@ export async function GET(req: NextRequest) {
     const { roles, userId } = payload;
 
     const url = new URL(req.url);
-    const search = url.searchParams.get("search") || undefined; // 🔹 new search param
+    const search = url.searchParams.get("search") || undefined;
     const roleFilter = url.searchParams.get("role") || undefined;
     const page = parseInt(url.searchParams.get("page") || "1");
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
 
     const whereClause: any = { deletedAt: null };
 
-    // 🔹 Apply search filter on fullName or email
     if (search) {
       whereClause.OR = [
         { fullName: { contains: search, mode: "insensitive" } },
@@ -68,7 +69,6 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // 🔐 Limit non-superadmins to their school sessions
     if (!roles.includes("SUPERADMIN")) {
       const adminMemberships = await prisma.userSchoolSession.findMany({
         where: { userId, active: true },
@@ -86,10 +86,11 @@ export async function GET(req: NextRequest) {
       whereClause.memberships = { some: { role: roleFilter } };
     }
 
-    // 🔄 Include relevant profiles
     const includeRelations: any = {
       memberships: { include: { schoolSession: true } },
+      superAdminMeta: true, // include SUPERADMIN metadata
     };
+
     if (roleFilter === "STUDENT") includeRelations.studentProfile = true;
     if (roleFilter === "PARENT") includeRelations.parentProfile = true;
     if (["TEACHER", "PRINCIPAL", "VICE_PRINCIPAL"].includes(roleFilter || ""))
@@ -146,8 +147,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 🔐 Admins can only create within their school sessions
-    if (!roles.includes("SUPERADMIN")) {
+    if (!roles.includes("SUPERADMIN") && rolesWithSchool.includes(role)) {
       const adminMembership = await prisma.userSchoolSession.findFirst({
         where: { userId, schoolSessionId, active: true },
       });
@@ -181,8 +181,13 @@ export async function POST(req: NextRequest) {
       }
 
       const profileKey = profileRoles[role];
-      if (profileKey && profileData) {
-        await tx[profileKey].create({ data: { ...profileData, userId: user.id } });
+      if (profileKey) {
+        if (role === "SUPERADMIN") {
+          // create superAdminMeta if SUPERADMIN
+          await tx.superAdmin.create({ data: { userId: user.id, metadata: profileData || {} } });
+        } else if (profileData) {
+          await tx[profileKey].create({ data: { ...profileData, userId: user.id } });
+        }
       }
 
       return user;
@@ -196,6 +201,7 @@ export async function POST(req: NextRequest) {
         teacherProfile: true,
         staffProfile: true,
         parentProfile: true,
+        superAdminMeta: true, // include SUPERADMIN metadata
       },
     });
 

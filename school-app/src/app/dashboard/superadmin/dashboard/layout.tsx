@@ -1,47 +1,38 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode } from "react";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 import LoaderModal from "@/components/layout/LoaderModal";
-import { apiGetSuperadminDashboard } from "@/lib/api/dashboard"; // hypothetical API
+import { useAuthStore } from "@/store/authStore";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState<any>(null);
+  const { user, loading: authLoading } = useAuthStore((state) => ({
+    user: state.user,
+    loading: state.loading,
+  }));
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const data = await apiGetSuperadminDashboard();
-        setDashboardData(data);
-      } catch (err) {
-        console.error("Failed to fetch dashboard data", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  if (loading) return <LoaderModal isVisible text="Loading dashboard..." />;
+  // 🔹 Show loader if auth state is loading or user is not yet loaded
+  if (authLoading || !user) {
+    return <LoaderModal isVisible text="Loading dashboard..." />;
+  }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="hidden md:flex flex-col w-64">
-        <Sidebar />
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200">
+        <Sidebar user={user} />
       </aside>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col">
         {/* Navbar */}
-        <header className="w-full shadow-md">
-          <Navbar />
+        <header className="w-full shadow-md bg-white z-10">
+          <Navbar user={user} />
         </header>
 
         {/* Page content */}
