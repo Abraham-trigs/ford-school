@@ -1,51 +1,52 @@
-import { ReactNode } from "react";
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma/prisma";
-import { authenticate } from "@/lib/auth";
-import AuthProvider from "@/store/authStoreProvider";
+"use client";
 
-export const metadata = {
-  title: "Dashboard",
-};
+import { ReactNode, useEffect, useState } from "react";
+import Sidebar from "./components/Sidebar";
+import Navbar from "./components/Navbar";
+import LoaderModal from "@/components/layout/LoaderModal";
+import { apiGetSuperadminDashboard } from "@/lib/api/dashboard"; // hypothetical API
 
-export default async function RootLayout({
-  children,
-}: {
+interface DashboardLayoutProps {
   children: ReactNode;
-}) {
-  let initialUser = null;
+}
 
-  try {
-    const token = cookies().get("token")?.value;
-    if (token) {
-      const payload: any = authenticate({
-        headers: { get: () => `Bearer ${token}` },
-      } as any);
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
 
-      const user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        include: { memberships: true },
-      });
-
-      if (user) {
-        initialUser = {
-          id: user.id,
-          fullName: user.fullName,
-          email: user.email,
-          roles: payload.roles,
-        };
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const data = await apiGetSuperadminDashboard();
+        setDashboardData(data);
+      } catch (err) {
+        console.error("Failed to fetch dashboard data", err);
+      } finally {
+        setLoading(false);
       }
     }
-  } catch (err) {
-    console.warn("No valid session:", err);
-  }
+    fetchData();
+  }, []);
+
+  if (loading) return <LoaderModal isVisible text="Loading dashboard..." />;
 
   return (
-    <html lang="en">
-      <body>
-        {/* Hydrate authStore with server data */}
-        <AuthProvider initialUser={initialUser}>{children}</AuthProvider>
-      </body>
-    </html>
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <aside className="hidden md:flex flex-col w-64">
+        <Sidebar />
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        {/* Navbar */}
+        <header className="w-full shadow-md">
+          <Navbar />
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 p-6 overflow-auto">{children}</main>
+      </div>
+    </div>
   );
 }

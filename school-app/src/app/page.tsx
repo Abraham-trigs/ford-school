@@ -14,10 +14,6 @@ export default function HomePage() {
           Welcome
         </h2>
 
-        <p className="text-lightGray mb-8">
-          Select your login type to continue
-        </p>
-
         <div className="flex flex-col gap-4">
           {/* SuperAdmin Login */}
           <button

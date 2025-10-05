@@ -1,91 +1,62 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useSuperAdminStore } from "@/app/dashboard/superadmin/dashboard/store/superAdminStore";
+import { useAuthStore } from "@/store/authStore";
+import LoaderModal from "@/components/layout/LoaderModal";
 import { Eye, EyeOff } from "lucide-react";
-import LoaderModal from "@/app/dashboard/superadmin/dashboard/components/LoaderModal";
 
-export default function SuperAdminLoginPage() {
+export default function LoginPage() {
   const router = useRouter();
-  const { setSuperAdmin } = useSuperAdminStore();
+  const {
+    login,
+    hydrate,
+    user,
+    loading: authLoading,
+  } = useAuthStore((state) => ({
+    login: state.login,
+    hydrate: state.hydrate,
+    user: state.user,
+    loading: state.loading,
+  }));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true); // initial refresh
-  const [authLoading, setAuthLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // ✅ One-time session refresh check
+  // Hydrate authStore on mount
   useEffect(() => {
-    const refreshSession = async () => {
-      try {
-        const refreshToken = localStorage.getItem("superAdminRefreshToken");
-        if (!refreshToken) return setLoading(false);
+    hydrate();
+  }, [hydrate]);
 
-        const res = await fetch("/api/auth/superadmin/refresh", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setSuperAdmin(data.superAdmin, data.accessToken);
-          router.replace("/dashboard/superadmin/dashboard");
-        } else {
-          localStorage.removeItem("superAdminRefreshToken");
-        }
-      } catch (err) {
-        console.error("Session refresh failed", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    refreshSession();
-  }, [router, setSuperAdmin]);
-
-  // ✅ Handle login
-  const handleLogin = async () => {
-    setError("");
-    if (!email || !password) {
-      setError("Please enter email and password");
-      return;
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (user) {
+      if (user.roles.includes("SUPERADMIN"))
+        router.replace("/dashboard/superadmin/dashboard");
+      else if (user.roles.includes("ADMIN"))
+        router.replace("/dashboard/admin/dashboard");
+      else if (user.roles.includes("TEACHER"))
+        router.replace("/dashboard/teacher/dashboard");
+      else router.replace("/dashboard");
     }
+  }, [user, router]);
 
-    setAuthLoading(true);
+  const handleLogin = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/auth/superadmin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Login failed");
-        return;
-      }
-
-      // ✅ Save in-memory
-      setSuperAdmin(data.superAdmin, data.accessToken);
-
-      // ✅ Persist refresh token
-      localStorage.setItem("superAdminRefreshToken", data.refreshToken);
-
-      router.replace("/dashboard/superadmin/dashboard");
-    } catch (err) {
-      console.error(err);
-      setError("Something went wrong. Try again.");
+      await login(email, password);
+    } catch (err: any) {
+      setError(err.message || "Login failed");
     } finally {
-      setAuthLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleLogin();
   };
 
@@ -100,7 +71,7 @@ export default function SuperAdminLoginPage() {
 
       <div className="bg-deepPurple p-8 rounded-lg shadow-lg w-full max-w-md text-center">
         <h2 className="text-2xl font-display font-bold text-secondary mb-6">
-          SuperAdmin Login
+          Login
         </h2>
 
         {error && <p className="text-errorPink mb-4 font-semibold">{error}</p>}

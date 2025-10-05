@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 // ------------------ ENUMS ------------------
@@ -202,6 +203,7 @@ model User {
   id                Int                   @id @default(autoincrement())
   email             String                 @unique           
   fullName          String
+  role              RoleType
   profilePicture    String?
   lastLoginAt       DateTime?
   createdAt         DateTime              @default(now())
@@ -237,23 +239,41 @@ model User {
   payments          Payment[]             @relation("UserPayments")
   createdByFor      FinancialTransaction[] @relation("CreatedBy")
   updatedByFor      FinancialTransaction[] @relation("UpdatedBy")
+
+  // --- Indexes ---
+  @@index([fullName])
+  @@index([email])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([department])
 }
 
 model UserSchoolSession {
-  id              Int           @id @default(autoincrement())
-  humanId         String        @unique              // School-specific human ID (e.g. SCH01-JDOE)
-  schoolSessionId Int
-  userId          Int
-  email           String                               // email inside this school (auto-generated)
-  password        String                               // password scoped to this school membership
-  role            RoleType
-  active          Boolean       @default(true)
+  id               Int            @id @default(autoincrement())
+  humanId          String         @unique // e.g., SCH01-JDOE
+  schoolSessionId  Int
+  userId           Int
+  email            String
+  password         String
+  role             RoleType
+  active           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  schoolSession   SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  // Relations
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolSession    SchoolSession  @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
 
-  @@unique([schoolSessionId, email])        // enforce unique email per school
-  @@unique([schoolSessionId, userId])       // user can only have one membership record per school
+  // --- Constraints ---
+  @@unique([schoolSessionId, email])
+  @@unique([schoolSessionId, userId])
+
+  // --- Indexes for efficient filtering ---
+  @@index([schoolSessionId])
+  @@index([role])
+  @@index([active])
+  @@index([role, schoolSessionId])
+  @@index([userId, role])
 }
 
 // ------------------ PROFILES ------------------
