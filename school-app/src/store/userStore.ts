@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { apiGetUsers, apiGetUserById } from "@/lib/api/users";
+import { useUserFilters } from "@/store/userFilters";
 
+/* ------------------------- Shared User Type ------------------------- */
 export interface User {
   id: number;
   email: string;
@@ -12,64 +14,52 @@ export interface User {
   [key: string]: any;
 }
 
+/* ------------------------- Store Definition ------------------------- */
 interface UserState {
   userList: User[];
   userMap: Record<number, User>;
   loading: boolean;
-  page: number;
-  pageSize: number;
   total: number;
-  filter: { role?: string; active?: boolean };
-  sort: { field: "fullName" | "email" | "createdAt"; direction: "asc" | "desc" };
-
-  setPage: (page: number) => void;
-  setPageSize: (size: number) => void;
-  setFilter: (filter: Partial<UserState["filter"]>) => void;
-  setSort: (sort: UserState["sort"]) => void;
 
   fetchUsers: () => Promise<void>;
   fetchUserById: (id: number) => Promise<User | null>;
 }
 
+/* ------------------------- Zustand Store ------------------------- */
 export const useUserStore = create<UserState>((set, get) => ({
   userList: [],
   userMap: {},
   loading: false,
-  page: 1,
-  pageSize: 20,
   total: 0,
-  filter: {},
-  sort: { field: "fullName", direction: "asc" },
-
-  setPage: (page) => set({ page }),
-  setPageSize: (pageSize) => set({ pageSize }),
-  setFilter: (filter) => set({ filter }),
-  setSort: (sort) => set({ sort }),
 
   fetchUsers: async () => {
-    const { page, pageSize, filter, sort } = get();
+    const filters = useUserFilters.getState();
+    const { page, pageSize, role, active, sort, search } = filters;
+
     set({ loading: true });
+
     try {
       const { data, meta } = await apiGetUsers({
         page,
         pageSize,
-        role: filter.role,
-        active: filter.active,
+        role,
+        active,
+        search,
         sortField: sort.field,
         sortDirection: sort.direction,
       });
 
-      const map: Record<number, User> = {};
-      data.forEach((u: User) => (map[u.id] = u));
+      const userMap: Record<number, User> = {};
+      data.forEach((u: User) => (userMap[u.id] = u));
 
       set({
         userList: data,
-        userMap: map,
-        total: meta.total,
+        userMap,
+        total: meta?.total ?? 0,
         loading: false,
       });
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
       set({ loading: false });
     }
   },
@@ -79,15 +69,18 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (cached) return cached;
 
     set({ loading: true });
+
     try {
       const user = await apiGetUserById(id);
-      set(state => ({
+
+      set((state) => ({
         userMap: { ...state.userMap, [id]: user },
         loading: false,
       }));
+
       return user;
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error("Failed to fetch user by ID:", error);
       set({ loading: false });
       return null;
     }

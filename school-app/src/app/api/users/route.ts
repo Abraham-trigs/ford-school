@@ -53,14 +53,20 @@ export async function GET(req: NextRequest) {
     const { roles, userId } = payload;
 
     const url = new URL(req.url);
-    const emailFilter = url.searchParams.get("email") || undefined;
+    const search = url.searchParams.get("search") || undefined; // 🔹 new search param
     const roleFilter = url.searchParams.get("role") || undefined;
     const page = parseInt(url.searchParams.get("page") || "1");
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
 
     const whereClause: any = { deletedAt: null };
-    if (emailFilter)
-      whereClause.email = { contains: emailFilter, mode: "insensitive" };
+
+    // 🔹 Apply search filter on fullName or email
+    if (search) {
+      whereClause.OR = [
+        { fullName: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
 
     // 🔐 Limit non-superadmins to their school sessions
     if (!roles.includes("SUPERADMIN")) {
@@ -68,7 +74,7 @@ export async function GET(req: NextRequest) {
         where: { userId, active: true },
         select: { schoolSessionId: true },
       });
-      const allowedSchoolIds = adminMemberships.map(m => m.schoolSessionId);
+      const allowedSchoolIds = adminMemberships.map((m) => m.schoolSessionId);
       whereClause.memberships = {
         some: {
           schoolSessionId: { in: allowedSchoolIds },
@@ -80,7 +86,7 @@ export async function GET(req: NextRequest) {
       whereClause.memberships = { some: { role: roleFilter } };
     }
 
-    // 🔄 Query users with lightweight includes
+    // 🔄 Include relevant profiles
     const includeRelations: any = {
       memberships: { include: { schoolSession: true } },
     };
@@ -88,7 +94,7 @@ export async function GET(req: NextRequest) {
     if (roleFilter === "PARENT") includeRelations.parentProfile = true;
     if (["TEACHER", "PRINCIPAL", "VICE_PRINCIPAL"].includes(roleFilter || ""))
       includeRelations.teacherProfile = true;
-    if (!roleFilter || (!["STUDENT", "PARENT", "TEACHER"].includes(roleFilter)))
+    if (!roleFilter || !["STUDENT", "PARENT", "TEACHER"].includes(roleFilter))
       includeRelations.staffProfile = true;
 
     const [users, total] = await Promise.all([

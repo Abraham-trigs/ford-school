@@ -1,4 +1,3 @@
-// lib/api/users.ts
 "use server";
 
 import "server-only";
@@ -44,41 +43,40 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL
   ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/users`
   : `${process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : ""}/api/users`;
 
-// --- Utility: handle fetch and unwrap data ---
 async function handleResponse<T>(res: Response): Promise<ApiResponse<T>> {
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error || "API request failed");
   return json;
 }
 
-// --- Get all users ---
+/* ------------------------- Updated Get Users ------------------------- */
 export async function apiGetUsers({
   page = 1,
   pageSize = 20,
-  sortBy = "createdAt",
-  sortOrder = "desc",
+  sortField = "createdAt",
+  sortDirection = "desc",
   role,
-  email,
-  fullName,
+  search,
 }: {
   page?: number;
   pageSize?: number;
-  sortBy?: string;
-  sortOrder?: "asc" | "desc";
+  sortField?: string;
+  sortDirection?: "asc" | "desc";
   role?: string;
-  email?: string;
-  fullName?: string;
+  search?: string;
 }): Promise<ApiResponse<User[]>> {
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
-    sortBy,
-    sortOrder,
+    sortBy: sortField,
+    sortOrder: sortDirection,
   });
 
   if (role) params.append("role", role);
-  if (email) params.append("email", email);
-  if (fullName) params.append("fullName", fullName);
+  if (search) {
+    // Search both fullName and email on backend
+    params.append("search", search);
+  }
 
   const res = await fetch(`${BASE_URL}?${params.toString()}`, {
     method: "GET",
@@ -89,7 +87,7 @@ export async function apiGetUsers({
   return handleResponse<User[]>(res);
 }
 
-// --- Get user by ID ---
+/* ------------------------- Other CRUD operations remain unchanged ------------------------- */
 export async function apiGetUserById(id: number): Promise<ApiResponse<User>> {
   const res = await fetch(`${BASE_URL}/${id}`, {
     method: "GET",
@@ -99,7 +97,6 @@ export async function apiGetUserById(id: number): Promise<ApiResponse<User>> {
   return handleResponse<User>(res);
 }
 
-// --- Create user ---
 export async function apiCreateUser(user: Partial<User>): Promise<ApiResponse<User>> {
   const res = await fetch(BASE_URL, {
     method: "POST",
@@ -107,14 +104,9 @@ export async function apiCreateUser(user: Partial<User>): Promise<ApiResponse<Us
     credentials: "include",
     body: JSON.stringify(user),
   });
-
-  // Optionally revalidate cache
-  // revalidateTag("users");
-
   return handleResponse<User>(res);
 }
 
-// --- Update user ---
 export async function apiUpdateUser(
   id: number,
   user: Partial<User> & { profileData?: Record<string, any>; schoolSessionId?: number }
@@ -125,15 +117,9 @@ export async function apiUpdateUser(
     credentials: "include",
     body: JSON.stringify(user),
   });
-
-  // Optionally revalidate cache
-  // revalidateTag(`user-${id}`);
-  // revalidateTag("users");
-
   return handleResponse<User>(res);
 }
 
-// --- Delete (soft-delete) user ---
 export async function apiDeleteUser(
   id: number
 ): Promise<ApiResponse<{ id: number; deletedAt: string }>> {
@@ -141,9 +127,5 @@ export async function apiDeleteUser(
     method: "DELETE",
     credentials: "include",
   });
-
-  // Optionally revalidate cache
-  // revalidateTag("users");
-
   return handleResponse<{ id: number; deletedAt: string }>(res);
 }
