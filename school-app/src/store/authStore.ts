@@ -11,23 +11,23 @@ export const useAuthStore = (): AuthActions => {
 
   return {
     login: async (email: string, password: string) => {
+      if (!email || !password) throw new Error("Email and password are required");
+
       try {
         const res = await fetch("/api/sessions/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
-          credentials: "include",
+          credentials: "include", // ensures cookies are sent
         });
 
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Login failed");
-        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Login failed");
 
-        const { token } = await res.json();
-        setToken(token);
-        await refreshProfile();
+        setToken(data.token);         // save JWT
+        await refreshProfile();       // fetch user profile
       } catch (err: any) {
+        console.error("Login error:", err.message || err);
         throw err;
       }
     },

@@ -5,41 +5,31 @@ import { useAuthStore } from "@/store/authStore";
 import LoaderModal from "@/components/layout/LoaderModal";
 import { Eye, EyeOff } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
+import { useSessionStore } from "@/store/sessionStore";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const {
-    user,
-    loading: authLoading,
-    login,
-  } = useAuthStore((state) => ({
-    user: state.user,
-    loading: state.loading,
-    login: state.login,
-  }));
+  const { login } = useAuthStore();
+  const { user, loading } = useSessionStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  // Redirect if already logged in
-  if (user) router.replace("/dashboard");
+  // redirect if logged in
+  if (user) router.replace("dashboard/superadmin/dashboard");
 
   const handleLogin = async () => {
-    if (localLoading || authLoading) return;
+    if (localLoading || loading) return;
     setLocalLoading(true);
-    setError("");
-
     try {
       await login(email.trim(), password);
       toast.success("Logged in successfully!");
       setPassword("");
     } catch (err: any) {
-      setError(err?.message || "Login failed");
-      toast.error(err?.message || "Login failed");
+      toast.error(err.message || "Login failed");
     } finally {
       setLocalLoading(false);
     }
@@ -49,7 +39,7 @@ export default function LoginPage() {
     if (e.key === "Enter") handleLogin();
   };
 
-  if (localLoading || authLoading)
+  if (localLoading || loading)
     return <LoaderModal isVisible text="Logging in..." />;
 
   return (
@@ -66,21 +56,17 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="Email"
-            className={`w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple ${
-              error ? "border border-red-500" : ""
-            }`}
+            className="w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
             value={email}
             onChange={(e) => setEmail(e.target.value.trimStart())}
             onKeyDown={handleKeyDown}
           />
 
-          <div className="relative w-full mb-2">
+          <div className="relative w-full mb-6">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
-              className={`w-full bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10 ${
-                error ? "border border-red-500" : ""
-              }`}
+              className="w-full bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -94,11 +80,9 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-
           <button
             onClick={handleLogin}
-            disabled={localLoading || authLoading}
+            disabled={localLoading || loading}
             className="w-full px-6 py-3 bg-accentTeal text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
           >
             Login

@@ -366,6 +366,7 @@ model ParentStudent {
   @@index([studentId])
   @@index([parentUserId])
   @@unique([parentUserId, studentId])
+  @@unique([studentId, parentProfileId])
 }
 
 
@@ -384,6 +385,7 @@ model Classroom {
   schoolSession   SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
 
   @@unique([schoolSessionId, name]) // makes classroom unique per session
+  @@unique([name, schoolSessionId])
 }
 
 // ------------------ GRADUATION ------------------
@@ -433,6 +435,7 @@ model Course {
   students         User[]        @relation("CourseStudents")
   assignments      Assignment[]
   grades           Grade[]
+  @@unique([code, schoolSessionId])
 }
 
 model Assignment {
@@ -453,6 +456,7 @@ model Assignment {
   teacher          User?          @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
   students         User[]         @relation("AssignmentStudents")
   submittedAt      DateTime?
+  @@unique([title, courseId])
 }
 
 model Grade {
@@ -470,6 +474,7 @@ model Grade {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
   assignment    Assignment? @relation("AssignmentGrades", fields: [assignmentId], references: [id], onDelete: SetNull)
+  @@unique([userId, assignmentId])
 }
 
 // ------------------ TRANSPORTATION ------------------
@@ -491,6 +496,7 @@ model Transportation {
 
   schoolSession  SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
   stopsTable     TransportStop[]
+  @@unique([routeName, schoolSessionId])
 }
 
 model TransportStop {
@@ -504,6 +510,7 @@ model TransportStop {
   createdAt       DateTime       @default(now())
 
   transportation  Transportation @relation(fields: [transportationId], references: [id], onDelete: Cascade)
+  @@unique([transportationId, orderIndex])
 }
 
 // ------------------ RESOURCES & FINANCE ------------------
@@ -524,6 +531,8 @@ model Resource {
 
   schoolSession    SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
   purchases        Purchase[]
+
+  @@index([schoolSessionId])
 }
 
 model Purchase {
@@ -543,7 +552,13 @@ model Purchase {
   resource         Resource            @relation(fields: [resourceId], references: [id], onDelete: Restrict)
   buyer            User?               @relation(fields: [buyerId], references: [id], onDelete: SetNull)
   payments         Payment[]           @relation("PurchasePayments")
-}
+
+  @@unique([resourceId, buyerId])
+  @@index([resourceId])
+  @@index([buyerId])
+  @@index([status])
+
+  }
 
 model FinancialTransaction {
   id               Int              @id @default(autoincrement())
@@ -564,7 +579,15 @@ model FinancialTransaction {
   createdBy        User?            @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy        User?            @relation("UpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   payments         Payment[]        @relation("TransactionPayments")
+  
+  @@index([schoolSessionId])
+  @@index([type])
+  @@index([status])
+  @@index([createdById])
+
+  @@unique([schoolSessionId, type, createdById])
 }
+
 
 model Payment {
   id                Int                @id @default(autoincrement())
@@ -583,4 +606,10 @@ model Payment {
   transaction       FinancialTransaction? @relation("TransactionPayments", fields: [transactionId], references: [id], onDelete: SetNull)
   purchase          Purchase?            @relation("PurchasePayments", fields: [purchaseId], references: [id], onDelete: SetNull)
   user              User?                @relation("UserPayments", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([transactionId])
+  @@index([purchaseId])
+  @@index([userId])
+  @@index([status])
+  @@index([gateway])
 }
