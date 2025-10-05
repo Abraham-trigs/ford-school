@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "react-hot-toast";
 
 export interface User {
   id: number;
@@ -11,34 +12,69 @@ export interface User {
 
 interface AuthState {
   user: User | null;
-  isAuthenticated: boolean;
   loading: boolean;
-  setUser: (user: User | null) => void;
+  isAuthenticated: boolean;
+
+  hydrate: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isAuthenticated: false,
   loading: true,
+  isAuthenticated: false,
 
-  /**
-   * Sets the current authenticated user
-   */
-  setUser: (user) => set({ user, isAuthenticated: !!user, loading: false }),
-
-  /**
-   * Logs out the user by calling the API and clearing the store
-   */
-  logout: async () => {
+  hydrate: async () => {
+    set({ loading: true });
     try {
-      // Call the logout endpoint; it should clear the HttpOnly cookie
-      await fetch("/api/session/logout", { method: "POST" });
+      const res = await fetch("/api/sessions/profile");
+      if (!res.ok) {
+        set({ user: null, isAuthenticated: false });
+        return;
+      }
+      const data = await res.json();
+      set({ user: data.data, isAuthenticated: true });
     } catch (err) {
-      console.error("Logout failed:", err);
+      console.error("Failed to hydrate auth:", err);
+      set({ user: null, isAuthenticated: false });
+    } finally {
+      set({ loading: false });
     }
+  },
 
-    // Clear the store state
-    set({ user: null, isAuthenticated: false });
+  login: async (email, password) => {
+    set({ loading: true });
+    try {
+      const res = await fetch("/api/sessions/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Login failed");
+
+      set({ user: data.data.user, isAuthenticated: true });
+      toast.success("Login successful!");
+    } catch (err: any) {
+      set({ user: null, isAuthenticated: false });
+      toast.error(err.message || "Login failed");
+      throw err;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  logout: async () => {
+    set({ loading: true });
+    try {
+      await fetch("/api/sessions/logout", { method: "POST" });
+      set({ user: null, isAuthenticated: false });
+      toast.success("Logged out!");
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      set({ loading: false });
+    }
   },
 }));

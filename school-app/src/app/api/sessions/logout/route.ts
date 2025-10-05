@@ -1,4 +1,3 @@
-// app/api/sessions/logout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
 
@@ -11,7 +10,6 @@ export async function POST(req: NextRequest) {
 
     const token = authHeader.split(" ")[1];
 
-    // Find session by token
     const session = await prisma.userSession.findFirst({
       where: { token, revoked: false },
     });
@@ -20,7 +18,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Session not found or already revoked" }, { status: 404 });
     }
 
-    // Revoke session
     await prisma.userSession.update({
       where: { id: session.id },
       data: { revoked: true },

@@ -4,14 +4,11 @@ import { authenticate } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
-    // Check token from Authorization header or cookie
     const token = req.cookies.get("token")?.value || req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Verify token and extract payload
     const payload: any = authenticate({ headers: { get: () => `Bearer ${token}` } } as NextRequest);
 
-    // Fetch user from DB
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       include: { memberships: true },
