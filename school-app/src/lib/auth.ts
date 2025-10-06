@@ -49,6 +49,18 @@ export async function canAccessSchool(
   return !!membership;
 }
 
+export async function apiRefreshToken(): Promise<{ accessToken: string }> {
+  const res = await fetch("/api/auth/refresh", {
+    method: "POST",
+    credentials: "include", // sends cookies
+  });
+
+  if (!res.ok) throw new Error("Failed to refresh token");
+  return res.json();
+}
+
+
+
 // --- Generate access token helper (for refresh flow) ---
 export function generateAccessToken(payload: AuthPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });

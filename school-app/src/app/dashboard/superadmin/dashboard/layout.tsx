@@ -6,11 +6,14 @@ import Navbar from "./components/Navbar";
 import LoaderModal from "@/components/layout/LoaderModal";
 import { useSessionStore } from "@/store/sessionStore";
 import { useRouter } from "next/navigation";
+import { useAutoRefresh } from "@/lib/hooks/AutoRefresh";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const initCalled = useRef(false);
   const { user, loading, refreshProfile } = useSessionStore();
+
+  useAutoRefresh();
 
   useEffect(() => {
     if (initCalled.current) return;

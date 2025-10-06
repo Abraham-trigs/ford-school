@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Profile, apiGetProfile } from "@/lib/api/profile";
-import { apiRefreshToken } from "@/lib//auth";
+import { apiRefreshToken }  from "@/lib/auth";
 
 interface SessionState {
   token: string | null;
@@ -59,7 +59,7 @@ export const useSessionStore = create<SessionState>()(
         try {
           const token = await apiRefreshToken();
           if (!token) throw new Error("No token returned");
-          set({ token });
+          set({ token: token.accessToken });
           return token;
         } catch (err: any) {
           console.error("refreshAccessToken failed:", err.message || err);
