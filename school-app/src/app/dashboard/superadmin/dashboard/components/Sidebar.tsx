@@ -19,8 +19,17 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Users", href: "/users", icon: Users },
+  {
+    label: "Dashboard",
+    href: "/dashboard/superadmin/dashboard",
+    icon: LayoutDashboard,
+  },
+
+  {
+    label: "Users",
+    href: "/dashboard/superadmin/dashboard/Users",
+    icon: Users,
+  },
   { label: "Schools", href: "/schools", icon: School },
   { label: "Admissions", href: "/admissions", icon: FileText },
   { label: "Attendance", href: "/attendance", icon: CalendarCheck },
