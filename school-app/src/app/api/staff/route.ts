@@ -1,12 +1,54 @@
+"use server";
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
-import { authenticate } from "@/lib/auth"; // centralized JWT + role check
-import bcrypt from "bcryptjs";
+import { authenticate } from "@/lib/auth";
+import { Redis } from "@upstash/redis";
+import { Ratelimit } from "@upstash/ratelimit";
+import { z } from "zod";
+import { createStaff } from "@/services/staff";
+import { createStaffResponse } from "@/utils/api";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!
+});
 
 const staffRoles = [
   "FINANCE","HR","RECEPTIONIST","IT_SUPPORT","TRANSPORT",
   "NURSE","COOK","CLEANER","SECURITY","MAINTENANCE"
 ];
+
+const ratelimit = new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(10, "1 m") });
+
+const getQuerySchema = z.object({
+  role: z.enum(staffRoles).optional(),
+  page: z.string().regex(/^\d+$/).optional(),
+  pageSize: z.string().regex(/^\d+$/).optional(),
+});
+
+const postBodySchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  password: z.string().min(8),
+  profilePicture: z.string().url().optional(),
+  role: z.enum(staffRoles),
+  schoolSessionId: z.string().uuid(),
+  profileData: z.object({
+    phoneNumber: z.string().optional(),
+    address: z.string().optional(),
+    dateOfBirth: z.string().optional(),
+    gender: z.enum(["MALE","FEMALE"]).optional(),
+  }).optional(),
+});
+
+// Lua script for atomic invalidation
+const invalidateScript = `
+  local keys = redis.call('SMEMBERS', KEYS[1])
+  if #keys > 0 then redis.call('DEL', unpack(keys)) end
+  redis.call('DEL', KEYS[1])
+  return keys
+`;
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,34 +56,60 @@ export async function GET(req: NextRequest) {
     const { roles, userId } = payload;
 
     const url = new URL(req.url);
-    const roleFilter = url.searchParams.get("role");
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
+    const query = getQuerySchema.parse(Object.fromEntries(url.searchParams.entries()));
+    const page = parseInt(query.page || "1");
+    const pageSize = parseInt(query.pageSize || "20");
 
-    const where: any = { role: { in: staffRoles } };
-    if (roleFilter && staffRoles.includes(roleFilter)) where.role = roleFilter;
-
+    let allowedSchoolIds: string[] | undefined;
     if (!roles.includes("SUPERADMIN")) {
-      const memberships = await prisma.userSchoolSession.findMany({
+      allowedSchoolIds = (await prisma.userSchoolSession.findMany({
         where: { userId, active: true },
-        select: { schoolSessionId: true },
-      });
-      const allowedIds = memberships.map(m => m.schoolSessionId);
-      where.memberships = { some: { schoolSessionId: { in: allowedIds }, active: true } };
+        select: { schoolSessionId: true }
+      })).map(m => m.schoolSessionId).sort();
+
+      if (!allowedSchoolIds.length) {
+        return NextResponse.json(createStaffResponse([], page, pageSize, 0));
+      }
     }
 
-    const staff = await prisma.staffProfile.findMany({
-      where,
-      include: { user: true, memberships: { include: { schoolSession: true } } },
-      skip: (page-1)*pageSize,
-      take: pageSize,
-      orderBy: { createdAt: "desc" },
-    });
+    const cacheKey = `staff:${query.role || "all"}:${page}:${allowedSchoolIds?.join(",") || "all"}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return NextResponse.json(JSON.parse(cached));
 
-    return NextResponse.json({ data: staff, meta: { page, pageSize } });
+    const staffWhere: any = {};
+    if (query.role) staffWhere.role = query.role;
+    if (allowedSchoolIds) staffWhere.memberships = { some: { schoolSessionId: { in: allowedSchoolIds }, active: true } };
+
+    // Efficient pagination + total count
+    const [staffProfiles, total] = await prisma.$transaction([
+      prisma.staffProfile.findMany({
+        where: staffWhere,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+        include: { user: true, memberships: { include: { schoolSession: true } } }
+      }),
+      prisma.staffProfile.count({ where: staffWhere })
+    ]);
+
+    const responseData = createStaffResponse(staffProfiles, page, pageSize, total);
+    await redis.set(cacheKey, JSON.stringify(responseData), { ex: 30 });
+
+    // Track cache key for targeted invalidation
+    const roleKeysSet = `staff:school:${allowedSchoolIds?.join(",") || "all"}:role:${query.role || "all"}:keys`;
+    await redis.sadd(roleKeysSet, cacheKey);
+
+    return NextResponse.json(responseData);
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    console.error("GET /api/staff failed", { error: err });
+    const status = err instanceof z.ZodError ? 400 : 500;
+    return NextResponse.json({
+      error: {
+        type: err instanceof z.ZodError ? "validation" : "server",
+        message: err.message,
+        details: err instanceof z.ZodError ? err.errors : undefined
+      }
+    }, { status });
   }
 }
 
@@ -50,41 +118,33 @@ export async function POST(req: NextRequest) {
     const payload = authenticate(req, ["SUPERADMIN","ADMIN"]);
     const { roles, userId: requesterId } = payload;
 
-    const body = await req.json();
-    const { email, fullName, password, profilePicture, role, schoolSessionId, profileData } = body;
+    const limit = await ratelimit.limit(requesterId);
+    if (!limit.success) return NextResponse.json({
+      error: { type: "rate_limit", message: "Rate limit exceeded" }
+    }, { status: 429 });
 
-    if (!email || !fullName || !password || !role || !schoolSessionId)
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    if (!staffRoles.includes(role))
-      return NextResponse.json({ error: "Invalid staff role" }, { status: 400 });
+    const body = postBodySchema.parse(await req.json());
+    const staffUser = await createStaff(body, requesterId, roles);
 
-    // Check management rights
-    const isAdmin = roles.includes("SUPERADMIN") || await prisma.userSchoolSession.findFirst({
-      where: { userId: requesterId, schoolSessionId, active: true },
-    });
-    if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const allowedSchoolIds = [body.schoolSessionId];
+    const roleKeysSet = `staff:school:${allowedSchoolIds.join(",")}:role:${body.role}:keys`;
+    await redis.eval(invalidateScript, [roleKeysSet]);
 
-    const hashed = await bcrypt.hash(password, 12);
-
-    const staffUser = await prisma.$transaction(async tx => {
-      const user = await tx.user.create({ data: { email, fullName, profilePicture } });
-
-      await tx.userSchoolSession.create({
-        data: { userId: user.id, email, password: hashed, role, schoolSessionId, active: true },
-      });
-
-      await tx.staffProfile.create({ data: { ...profileData, userId: user.id } });
-      return user;
-    });
-
-    const created = await prisma.staffProfile.findFirst({
+    const createdProfile = await prisma.staffProfile.findFirst({
       where: { userId: staffUser.id },
-      include: { user: true, memberships: { include: { schoolSession: true } } },
+      include: { user: true, memberships: { include: { schoolSession: true } } }
     });
 
-    return NextResponse.json({ data: created }, { status: 201 });
+    return NextResponse.json({ data: createdProfile }, { status: 201 });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    console.error("POST /api/staff failed", { error: err });
+    const status = err instanceof z.ZodError ? 400 : err.message === "Forbidden" ? 403 : 500;
+    return NextResponse.json({
+      error: {
+        type: err instanceof z.ZodError ? "validation" : err.message === "Forbidden" ? "auth" : "server",
+        message: err.message,
+        details: err instanceof z.ZodError ? err.errors : undefined
+      }
+    }, { status });
   }
 }

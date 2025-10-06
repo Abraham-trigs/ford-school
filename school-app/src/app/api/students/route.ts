@@ -1,93 +1,234 @@
+// /api/student/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
+import { redis } from "@/lib/redis";
 import { authenticate } from "@/lib/auth";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
+import { rateLimiter } from "@/lib/rateLimiter";
+import { createStudent, updateStudent, deleteStudent } from "@/services/student";
 
-const allowedRoles = ["SUPERADMIN", "ADMIN"];
+// --------------------
+// Zod Schemas
+// --------------------
+const getQuerySchema = z.object({
+  page: z.string().regex(/^\d+$/).optional(),
+  pageSize: z.string().regex(/^\d+$/).optional(),
+});
 
-// Zod schema for POST
-const createStudentSchema = z.object({
+const postBodySchema = z.object({
   email: z.string().email(),
-  fullName: z.string(),
-  password: z.string().min(6),
-  classroomId: z.number(),
-  schoolSessionId: z.number(),
+  fullName: z.string().min(2),
+  password: z.string().min(8),
+  profilePicture: z.string().url().optional(),
+  schoolSessionId: z.string().uuid(),
   profileData: z.record(z.any()).optional(),
 });
 
-async function canManageStudent(userId: number, roles: string[], schoolSessionId: number) {
-  if (roles.includes("SUPERADMIN")) return true;
-  if (roles.includes("ADMIN")) {
-    const membership = await prisma.userSchoolSession.findFirst({ where: { userId, schoolSessionId, active: true } });
-    return !!membership;
-  }
-  return false;
+const putBodySchema = z.object({
+  userId: z.string().uuid(),
+  schoolSessionId: z.string().uuid(),
+  profileData: z.record(z.any()).optional(),
+});
+
+const deleteBodySchema = z.object({
+  userId: z.string().uuid(),
+  schoolSessionId: z.string().uuid(),
+});
+
+// --------------------
+// Utility: Error Handling
+// --------------------
+function handleError(err: any) {
+  console.error(err);
+  const status = err instanceof z.ZodError
+    ? 400
+    : err.message === "Forbidden"
+    ? 403
+    : err.message === "RateLimit"
+    ? 429
+    : err.message === "NotFound"
+    ? 404
+    : 500;
+
+  const errorType = err instanceof z.ZodError
+    ? "Validation"
+    : ["Forbidden", "RateLimit", "NotFound"].includes(err.message)
+    ? err.message
+    : "ServerError";
+
+  const details = err instanceof z.ZodError ? err.errors : undefined;
+
+  return NextResponse.json({
+    error: {
+      type: errorType,
+      message: err.message || "Internal server error",
+      details,
+    },
+  }, { status });
 }
 
+// --------------------
+// Redis Lua Script: Atomic Invalidate
+// --------------------
+const invalidateCacheScript = `
+local keys = redis.call("SMEMBERS", KEYS[1])
+if #keys > 0 then
+  redis.call("DEL", unpack(keys))
+end
+redis.call("DEL", KEYS[1])
+return keys
+`;
+
+// --------------------
+// GET Handler
+// --------------------
 export async function GET(req: NextRequest) {
   try {
-    const { roles, userId } = authenticate(req);
-
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
     const url = new URL(req.url);
-    const classroomId = url.searchParams.get("classroomId") ? parseInt(url.searchParams.get("classroomId")!) : undefined;
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
+    const query = getQuerySchema.parse(Object.fromEntries(url.searchParams.entries()));
+    const page = parseInt(query.page || "1");
+    const pageSize = parseInt(query.pageSize || "20");
 
-    const whereClause: any = { deletedAt: null };
-    if (classroomId) whereClause.classroomId = classroomId;
-
-    if (!roles.includes("SUPERADMIN")) {
-      const memberships = await prisma.userSchoolSession.findMany({ where: { userId, active: true }, select: { schoolSessionId: true } });
-      const allowedIds = memberships.map(m => m.schoolSessionId);
-      whereClause.memberships = { some: { schoolSessionId: { in: allowedIds }, active: true } };
+    // Determine allowed schools
+    let allowedSchoolIds: string[] | "all" = "all";
+    if (!payload.roles.includes("SUPERADMIN")) {
+      const memberships = await prisma.userSchoolSession.findMany({
+        where: { userId: payload.userId, active: true },
+        select: { schoolSessionId: true },
+      });
+      allowedSchoolIds = memberships.map(m => m.schoolSessionId).sort();
+      if (allowedSchoolIds.length === 0) return NextResponse.json({ data: [], meta: { page, pageSize, total: 0 } });
     }
 
-    const students = await prisma.studentProfile.findMany({
-      where: whereClause,
-      include: { user: true, classroom: true, parents: { include: { user: true } } },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { createdAt: "desc" },
-    });
+    const schoolIdentifier = Array.isArray(allowedSchoolIds) ? allowedSchoolIds.join(",") : "all";
+    const cacheKey = `student:school:${schoolIdentifier}:page:${page}:size:${pageSize}`;
 
-    return NextResponse.json({ data: students, meta: { page, pageSize } });
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    // Serve from cache if available
+    const cached = await redis.get(cacheKey);
+    if (cached) return NextResponse.json(JSON.parse(cached));
+
+    // Rate limit DB-hitting request
+    const limit = await rateLimiter.limit(payload.userId);
+    if (!limit.success) throw new Error("RateLimit");
+
+    // Prisma filter
+    const where: any = {};
+    if (allowedSchoolIds !== "all") {
+      where.memberships = { some: { schoolSessionId: { in: allowedSchoolIds }, active: true } };
+    }
+
+    // Fetch students + total in one transaction
+    const [students, total] = await prisma.$transaction([
+      prisma.studentProfile.findMany({
+        where,
+        include: { user: true, memberships: { include: { schoolSession: true } } },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.studentProfile.count({ where }),
+    ]);
+
+    const responseData = { data: students, meta: { page, pageSize, total } };
+
+    // Cache and add to tag set
+    await redis.set(cacheKey, JSON.stringify(responseData), { ex: 30 });
+    const tagSetKey = `student:school:${schoolIdentifier}:keys`;
+    await redis.sadd(tagSetKey, cacheKey);
+
+    return NextResponse.json(responseData);
+  } catch (err: any) {
+    return handleError(err);
   }
 }
 
+// --------------------
+// POST Handler
+// --------------------
 export async function POST(req: NextRequest) {
   try {
-    const { roles, userId: requesterId } = authenticate(req);
-    if (!roles.some(r => allowedRoles.includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const body = postBodySchema.parse(await req.json());
 
-    const body = await req.json();
-    const parseResult = createStudentSchema.safeParse(body);
-    if (!parseResult.success) return NextResponse.json({ error: parseResult.error.errors }, { status: 400 });
+    // Authorization for non-SUPERADMIN
+    if (!payload.roles.includes("SUPERADMIN")) {
+      const membership = await prisma.userSchoolSession.findFirst({
+        where: { userId: payload.userId, schoolSessionId: body.schoolSessionId, active: true },
+      });
+      if (!membership) throw new Error("Forbidden");
+    }
 
-    const { email, fullName, password, classroomId, profileData, schoolSessionId } = parseResult.data;
-    const canManage = await canManageStudent(requesterId, roles, schoolSessionId);
-    if (!canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const student = await createStudent(body);
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Invalidate cache
+    const tagSetKey = `student:school:${body.schoolSessionId}:keys`;
+    await redis.eval(invalidateCacheScript, [tagSetKey]);
 
-    const newStudent = await prisma.$transaction(async tx => {
-      const user = await tx.user.create({ data: { email, fullName } });
-      await tx.userSchoolSession.create({ data: { userId: user.id, email, password: hashedPassword, role: "STUDENT", schoolSessionId, active: true } });
-      await tx.studentProfile.create({ data: { ...profileData, userId: user.id, classroomId } });
-      return user;
+    return NextResponse.json({ data: student });
+  } catch (err: any) {
+    return handleError(err);
+  }
+}
+
+// --------------------
+// PUT Handler
+// --------------------
+export async function PUT(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const body = putBodySchema.parse(await req.json());
+
+    // Authorization for non-SUPERADMIN
+    if (!payload.roles.includes("SUPERADMIN")) {
+      const membership = await prisma.userSchoolSession.findFirst({
+        where: { userId: payload.userId, schoolSessionId: body.schoolSessionId, active: true },
+      });
+      if (!membership) throw new Error("Forbidden");
+    }
+
+    const updatedStudent = await updateStudent(body);
+
+    // Invalidate cache
+    const tagSetKey = `student:school:${body.schoolSessionId}:keys`;
+    await redis.eval(invalidateCacheScript, [tagSetKey]);
+
+    return NextResponse.json({ data: updatedStudent });
+  } catch (err: any) {
+    return handleError(err);
+  }
+}
+
+// --------------------
+// DELETE Handler
+// --------------------
+export async function DELETE(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const body = deleteBodySchema.parse(await req.json());
+
+    // Find membership to authorize
+    const membership = await prisma.userSchoolSession.findFirst({
+      where: { userId: body.userId, schoolSessionId: body.schoolSessionId, role: "STUDENT" },
+      select: { schoolSessionId: true },
     });
+    if (!membership) throw new Error("NotFound");
 
-    const createdStudent = await prisma.studentProfile.findFirst({
-      where: { userId: newStudent.id },
-      include: { user: true, classroom: true, parents: { include: { user: true } } },
-    });
+    if (!payload.roles.includes("SUPERADMIN")) {
+      const isAdmin = await prisma.userSchoolSession.findFirst({
+        where: { userId: payload.userId, schoolSessionId: body.schoolSessionId, active: true },
+      });
+      if (!isAdmin) throw new Error("Forbidden");
+    }
 
-    return NextResponse.json({ data: createdStudent }, { status: 201 });
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    await deleteStudent(body.userId, body.schoolSessionId);
+
+    // Invalidate cache
+    const tagSetKey = `student:school:${membership.schoolSessionId}:keys`;
+    await redis.eval(invalidateCacheScript, [tagSetKey]);
+
+    return NextResponse.json({ data: null, message: "Student deleted successfully" });
+  } catch (err: any) {
+    return handleError(err);
   }
 }
