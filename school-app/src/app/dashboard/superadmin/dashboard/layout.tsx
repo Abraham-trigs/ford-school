@@ -1,41 +1,54 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 import LoaderModal from "@/components/layout/LoaderModal";
-import { useAuthStore } from "@/store/authStore";
+import { useSessionStore } from "@/store/sessionStore";
+import { useRouter } from "next/navigation";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, loading: authLoading } = useAuthStore((state) => ({
-    user: state.user,
-    loading: state.loading,
-  }));
+  const router = useRouter();
+  const initCalled = useRef(false);
 
-  // 🔹 Show loader if auth state is loading or user is not yet loaded
-  if (authLoading || !user) {
+  const { user, loading, refreshProfile } = useSessionStore();
+
+  useEffect(() => {
+    // 🚫 Only run once on mount
+    if (initCalled.current) return;
+    initCalled.current = true;
+
+    const init = async () => {
+      const profile = await refreshProfile();
+
+      // 🧠 Only redirect once (avoid race with layout hydration)
+      if (!profile) {
+        console.warn("No active session → redirecting to /login");
+        router.replace("/login");
+      }
+    };
+
+    init();
+  }, [refreshProfile, router]);
+
+  if (loading || !user) {
     return <LoaderModal isVisible text="Loading dashboard..." />;
   }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200">
         <Sidebar user={user} />
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col">
-        {/* Navbar */}
         <header className="w-full shadow-md bg-white z-10">
           <Navbar user={user} />
         </header>
-
-        {/* Page content */}
         <main className="flex-1 p-6 overflow-auto">{children}</main>
       </div>
     </div>
