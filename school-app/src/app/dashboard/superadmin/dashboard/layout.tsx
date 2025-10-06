@@ -7,25 +7,17 @@ import LoaderModal from "@/components/layout/LoaderModal";
 import { useSessionStore } from "@/store/sessionStore";
 import { useRouter } from "next/navigation";
 
-interface DashboardLayoutProps {
-  children: ReactNode;
-}
-
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const initCalled = useRef(false);
-
   const { user, loading, refreshProfile } = useSessionStore();
 
   useEffect(() => {
-    // 🚫 Only run once on mount
     if (initCalled.current) return;
     initCalled.current = true;
 
     const init = async () => {
       const profile = await refreshProfile();
-
-      // 🧠 Only redirect once (avoid race with layout hydration)
       if (!profile) {
         console.warn("No active session → redirecting to /login");
         router.replace("/login");
@@ -33,7 +25,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     };
 
     init();
-  }, [refreshProfile, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ stable
 
   if (loading || !user) {
     return <LoaderModal isVisible text="Loading dashboard..." />;
