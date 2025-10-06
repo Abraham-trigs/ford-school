@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-layout">
       <aside className="hidden md:flex flex-col w-64">
         <Sidebar user={user} />
       </aside>

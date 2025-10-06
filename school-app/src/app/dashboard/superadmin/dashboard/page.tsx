@@ -10,7 +10,7 @@ export default function SuperAdminDashboardPage() {
       title: "Total Users",
       value: "1,245",
       icon: Users,
-      color: "bg-accentTeal",
+      color: "bg-Primary",
     },
     { title: "Schools", value: "32", icon: School, color: "bg-accentPurple" },
     {
@@ -28,7 +28,7 @@ export default function SuperAdminDashboardPage() {
   ];
 
   return (
-    <main className="flex-1 p-6 overflow-y-auto bg-primary">
+    <main className="flex-1 p-6 overflow-y-auto">
       <h1 className="text-3xl font-bold mb-6 text-lightGrey">
         SuperAdmin Dashboard
       </h1>
@@ -42,19 +42,25 @@ export default function SuperAdminDashboardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card>
-              <div className="flex items-center justify-between p-4">
-                <div>
-                  <h2 className="text-lg font-semibold">{stat.title}</h2>
-                  <p className="text-2xl font-bold">{stat.value}</p>
+            <div>
+              <Card>
+                <div className="flex items-center text-lightGray justify-between p-4">
+                  <div>
+                    <h2 className=" text-lg font-bol ">{stat.title}</h2>
+                    <p className="text-accentTeal text-2xl font-bold">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <div
+                    className={`${stat.color} p-3 rounded-full shadow-md transition-transform transform hover:scale-110`}
+                  >
+                    <stat.icon className="w-6 h-6 text-accentTeal" />
+                  </div>
                 </div>
-                <div
-                  className={`${stat.color} p-3 rounded-full shadow-md transition-transform transform hover:scale-110`}
-                >
-                  <stat.icon className="w-6 h-6 text-secondary" />
-                </div>
-              </div>
-            </Card>
+              </Card>
+
+              <div className="bg-[#460579] hover:bg-[#59029d] w-auto h-10 -mt-20 pb-28 rounded-2xl shadow-lg p-6  hover:shadow-xl"></div>
+            </div>
           </motion.div>
         ))}
       </div>

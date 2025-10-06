@@ -1,13 +1,32 @@
-export default function UserTable({
-  users,
-  onRefresh,
-  onEdit,
-}: UserTableProps & { onEdit: (user: User) => void }) {
+"use client";
+
+import { useUserStore, User } from "@/store/userStore";
+
+interface UserTableProps {
+  onEdit: (user: User) => void;
+}
+
+export default function UserTable({ onEdit }: UserTableProps) {
+  const { userList, loading, fetchUsers } = useUserStore();
+
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
-    await fetch(`/api/users/${id}`, { method: "DELETE" });
-    onRefresh();
+
+    try {
+      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete user");
+
+      // Refresh store after deletion
+      await fetchUsers();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete user. Please try again.");
+    }
   };
+
+  if (loading) return <p className="text-lightGray">Loading users...</p>;
+  if (!userList.length)
+    return <p className="text-lightGray">No users found.</p>;
 
   return (
     <table className="w-full border-collapse text-left">
@@ -21,12 +40,12 @@ export default function UserTable({
         </tr>
       </thead>
       <tbody>
-        {users.map((user) => (
+        {userList.map((user) => (
           <tr key={user.id} className="border-b border-secondary">
             <td className="p-3">{user.id}</td>
-            <td className="p-3">{user.name || "-"}</td>
+            <td className="p-3">{user.fullName || "-"}</td>
             <td className="p-3">{user.email}</td>
-            <td className="p-3">{user.role}</td>
+            <td className="p-3">{user.roles.join(", ")}</td>
             <td className="p-3 flex gap-2">
               <button
                 onClick={() => onEdit(user)}

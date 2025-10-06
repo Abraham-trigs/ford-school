@@ -41,10 +41,12 @@ export default function LoginPage() {
   return (
     <>
       <Toaster position="top-right" />
-      <main className="w-screen h-screen bg-secondary flex flex-col items-center justify-center px-4">
-        <h1 className="text-8xl font-thin text-lightGrey mb-12">.Astire</h1>
+      <main className="w-auto h-auto bg-deeper flex flex-col items-center justify-center px-4">
+        <h1 className="text-8xl font-thin text-lightGrey mb-12 pt-52">
+          .Astire
+        </h1>
 
-        <div className="bg-deepPurple p-8 rounded-lg shadow-lg w-full max-w-md text-center">
+        <div className="bg-purple p-8 rounded-lg shadow-lg w-full max-w-md text-center">
           <h2 className="text-2xl font-display font-bold text-secondary mb-6">
             Login
           </h2>
@@ -52,7 +54,7 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="Email"
-            className="w-full mb-4 bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
+            className="w-full mb-4 bg-deepest text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
             value={email}
             onChange={(e) => setEmail(e.target.value.trimStart())}
             onKeyDown={handleKeyDown}
@@ -62,7 +64,7 @@ export default function LoginPage() {
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
-              className="w-full bg-secondary text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
+              className="w-full bg-deepest text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -79,7 +81,7 @@ export default function LoginPage() {
           <button
             onClick={handleLogin}
             disabled={localLoading || loading}
-            className="w-full px-6 py-3 bg-accentTeal text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
+            className="w-full px-6 py-3 bg-greener text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
           >
             Login
           </button>

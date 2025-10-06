@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { apiGetUsers, apiGetUserById } from "@/lib/api/users";
 import { useUserFilters } from "@/store/userFilters";
 
-/* ------------------------- Shared User Type ------------------------- */
 export interface User {
   id: number;
   email: string;
@@ -14,7 +13,6 @@ export interface User {
   [key: string]: any;
 }
 
-/* ------------------------- Store Definition ------------------------- */
 interface UserState {
   userList: User[];
   userMap: Record<number, User>;
@@ -25,13 +23,13 @@ interface UserState {
   fetchUserById: (id: number) => Promise<User | null>;
 }
 
-/* ------------------------- Zustand Store ------------------------- */
 export const useUserStore = create<UserState>((set, get) => ({
   userList: [],
   userMap: {},
   loading: false,
   total: 0,
 
+  /* ------------------- Fetch all users ------------------- */
   fetchUsers: async () => {
     const filters = useUserFilters.getState();
     const { page, pageSize, role, active, sort, search } = filters;
@@ -39,31 +37,32 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ loading: true });
 
     try {
-      const { data, meta } = await apiGetUsers({
+      const res = await apiGetUsers({
         page,
         pageSize,
         role,
-        active,
         search,
         sortField: sort.field,
         sortDirection: sort.direction,
       });
 
+      const data = res.data || [];
       const userMap: Record<number, User> = {};
-      data.forEach((u: User) => (userMap[u.id] = u));
+      data.forEach((u) => (userMap[u.id] = u));
 
       set({
         userList: data,
         userMap,
-        total: meta?.total ?? 0,
+        total: res.meta?.total ?? 0,
         loading: false,
       });
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
+    } catch (error: any) {
+      console.error("Failed to fetch users:", error.message || error);
       set({ loading: false });
     }
   },
 
+  /* ------------------- Fetch single user by ID ------------------- */
   fetchUserById: async (id: number) => {
     const cached = get().userMap[id];
     if (cached) return cached;
@@ -71,7 +70,8 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ loading: true });
 
     try {
-      const user = await apiGetUserById(id);
+      const res = await apiGetUserById(id);
+      const user = res.data;
 
       set((state) => ({
         userMap: { ...state.userMap, [id]: user },
@@ -79,10 +79,16 @@ export const useUserStore = create<UserState>((set, get) => ({
       }));
 
       return user;
-    } catch (error) {
-      console.error("Failed to fetch user by ID:", error);
+    } catch (error: any) {
+      console.error("Failed to fetch user by ID:", error.message || error);
       set({ loading: false });
       return null;
     }
   },
 }));
+
+/* ------------------- Auto-fetch on app hydration ------------------- */
+if (typeof window !== "undefined") {
+  const { fetchUsers } = useUserStore.getState();
+  fetchUsers().catch((err) => console.error("Auto-fetch failed:", err));
+}

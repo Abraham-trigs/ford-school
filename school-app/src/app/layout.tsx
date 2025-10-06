@@ -14,10 +14,10 @@ interface RootLayoutProps {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
-      <body className="bg-primary text-lightGray font-sans min-h-screen">
+      <body className="bg-deeper text-lightGray font-sans min-h-screen">
         <div className="flex flex-col min-h-screen">
           <main className="flex-1">{children}</main>
-          <footer className="text-center text-sm text-accentTeal py-4">
+          <footer className="text-center text-sm text-accentTeal bg-deepest py-4">
             &copy; {new Date().getFullYear()} Astir. All rights reserved.
           </footer>
         </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useUIStore } from "@/store/ui/superadmin";
 import { Menu, Bell, Settings, User, LogOut } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, backInOut } from "framer-motion";
 import Link from "next/link";
 
 const menuItems = [
@@ -51,7 +51,7 @@ export default function Navbar() {
   }, [profileOpen]);
 
   return (
-    <header className="bg-secondary p-4 flex justify-between items-center shadow-md relative z-10">
+    <header className="p-4 flex justify-between items-center  border-b-2 border-greener relative z-10">
       <div className="flex items-center gap-2">
         {isMobile && (
           <button
@@ -68,30 +68,34 @@ export default function Navbar() {
 
       <div className="flex items-center gap-4 relative" ref={profileRef}>
         <button
-          className="relative p-2 rounded-full hover:bg-accentPurple transition-colors"
+          className="relative p-2 rounded-full hover:bg-greener hover:text-deeper transition-colors"
           onClick={() => setProfileOpen((prev) => !prev)}
         >
           <Bell size={20} />
           <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
         </button>
 
+        {/* PROFILE */}
         <div
-          className="flex items-center gap-2 bg-accentTeal px-3 py-1 rounded-lg cursor-pointer"
+          className="flex items-center gap-2 bg-greener  px-3 py-1 rounded-lg cursor-pointer"
           onClick={() => setProfileOpen((prev) => !prev)}
         >
-          <span className="w-6 h-6 rounded-full bg-deepPurple"></span>
-          <span className="text-deepPurple font-semibold text-sm">Admin</span>
+          <span className="w-6 h-6 rounded-full bg-deeper"></span>
+          <span className="text-deeper font-semibold text-sm">Admin</span>
         </div>
 
         {/* Profile Dropdown */}
         <AnimatePresence>
           {profileOpen && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -70 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15 }}
-              className="absolute right-0 top-12 bg-secondary rounded-md w-40 flex flex-col p-2 gap-1"
+              exit={{
+                opacity: 0,
+                animationDuration: 0.000000000000000000000000000001,
+              }}
+              transition={{ duration: 0.4 }}
+              className="absolute right-0 top-12  bg-purple0  font-semibold text-secondary rounded-md w-50 flex flex-col p-2 gap-1"
             >
               <DropdownItem icon={User} label="Profile" />
               <DropdownItem icon={Settings} label="Settings" />
@@ -136,9 +140,9 @@ function DropdownItem({
   label: string;
 }) {
   return (
-    <button className="flex items-center gap-2 px-3 py-2 rounded hover:bg-accentPurple transition-colors">
-      <Icon size={18} />
-      <span className="text-deepPurple text-sm">{label}</span>
+    <button className="flex flex-row justify-start gap-2  px-10 py-2 rounded hover:text-greener hover:bg-deeper transition-colors">
+      <Icon size={22} />
+      <span className="  text-m">{label}</span>
     </button>
   );
 }

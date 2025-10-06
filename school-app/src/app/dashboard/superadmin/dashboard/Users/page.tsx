@@ -1,31 +1,13 @@
-// app/dashboard/users/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
 import UserTable from "./components/UserTable";
-
-interface User {
-  id: number;
-  name?: string;
-  email: string;
-  role: string;
-}
+import { useUserStore } from "@/store/userStore";
+import { useUserFilters } from "@/store/userFilters";
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    const res = await fetch("/api/users");
-    const data = await res.json();
-    setUsers(data.users || []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  // Read from store only
+  const { userList, loading, fetchUsers } = useUserStore();
+  const filters = useUserFilters((state) => state); // subscribe to filters if needed
 
   return (
     <div className="p-6">
@@ -36,7 +18,11 @@ export default function UsersPage() {
       {loading ? (
         <p className="text-lightGray">Loading users...</p>
       ) : (
-        <UserTable users={users} onRefresh={fetchUsers} />
+        <UserTable
+          users={userList}
+          onRefresh={fetchUsers} // optional, calls store action only
+          onEdit={() => {}}
+        />
       )}
     </div>
   );
