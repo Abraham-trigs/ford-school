@@ -28,7 +28,7 @@ export default function SuperAdminDashboardPage() {
   ];
 
   return (
-    <main className="flex-1 p-6 overflow-y-auto">
+    <main className="flex-1 p-6 overflow-y-auto bg-primary">
       <h1 className="text-3xl font-bold mb-6 text-lightGrey">
         SuperAdmin Dashboard
       </h1>

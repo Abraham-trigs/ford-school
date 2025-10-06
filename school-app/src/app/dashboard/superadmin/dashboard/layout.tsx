@@ -40,13 +40,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200">
+    <div className="flex min-h-screen">
+      <aside className="hidden md:flex flex-col w-64">
         <Sidebar user={user} />
       </aside>
 
       <div className="flex-1 flex flex-col">
-        <header className="w-full shadow-md bg-white z-10">
+        <header className="w-full shadow-md z-10">
           <Navbar user={user} />
         </header>
         <main className="flex-1 p-6 overflow-auto">{children}</main>
