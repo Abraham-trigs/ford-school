@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "@/store/ui/superadmin";
 import {
   LayoutDashboard,
   Users,

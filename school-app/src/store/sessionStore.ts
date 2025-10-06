@@ -8,10 +8,9 @@ interface SessionState {
   loading: boolean;
   error: string | null;
 
-  // Actions
   setToken: (token: string) => void;
   clearSession: () => void;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<Profile | null>;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -29,9 +28,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     try {
       const profile = await apiGetProfile();
       set({ user: profile, loading: false });
+      return profile; // ✅ return fetched profile
     } catch (err: any) {
       console.error("Profile refresh error:", err.message || err);
       set({ user: null, loading: false, error: err.message });
+      return null; // ✅ also return null on error
     }
   },
 }));

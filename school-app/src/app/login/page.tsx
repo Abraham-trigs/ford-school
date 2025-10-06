@@ -2,24 +2,19 @@
 
 import { useState, KeyboardEvent } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useSessionStore } from "@/store/sessionStore";
 import LoaderModal from "@/components/layout/LoaderModal";
 import { Eye, EyeOff } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
-import { useSessionStore } from "@/store/sessionStore";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
   const { login } = useAuthStore();
-  const { user, loading } = useSessionStore();
+  const { loading } = useSessionStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
-
-  // redirect if logged in
-  if (user) router.replace("dashboard/superadmin/dashboard");
 
   const handleLogin = async () => {
     if (localLoading || loading) return;
@@ -28,6 +23,7 @@ export default function LoginPage() {
       await login(email.trim(), password);
       toast.success("Logged in successfully!");
       setPassword("");
+      // ✅ Redirect handled automatically in sessionStore
     } catch (err: any) {
       toast.error(err.message || "Login failed");
     } finally {

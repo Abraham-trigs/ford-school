@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "@/store/ui/superadmin";
 import { Menu, Bell, Settings, User, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
