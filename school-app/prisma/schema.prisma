@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
@@ -133,83 +133,87 @@ enum ResourceCategory {
 
 // ------------------ SESSIONS ------------------
 model SuperAdminSession {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   superAdminId Int
-  token        String    @unique          // hashed refresh token or session token
-  userAgent    String?                     // optional: browser/device info
-  ipAddress    String?                     // optional
-  createdAt    DateTime  @default(now())
+  token        String     @unique // hashed refresh token or session token
+  userAgent    String? // optional: browser/device info
+  ipAddress    String? // optional
+  createdAt    DateTime   @default(now())
   expiresAt    DateTime
-  revoked      Boolean   @default(false)
-superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [userId], onDelete: Cascade)
+  revoked      Boolean    @default(false)
+  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [userId], onDelete: Cascade)
 }
 
 //.........................USER SESSION..................................
 model UserSession {
-  id           Int       @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   userId       Int
-  token        String    @unique
+  token        String   @unique
   refreshToken String   @unique
   userAgent    String?
   ipAddress    String?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
   expiresAt    DateTime
-  revoked      Boolean   @default(false)
+  revoked      Boolean  @default(false)
 
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
-
 
 // ------------------ SYSTEM ADMINS ------------------
 model SuperAdmin {
-  userId   Int    @id
-  user     User   @relation(fields: [userId], references: [id])
-  metadata Json?
-  sessions SuperAdminSession[]
+  userId         Int                 @id
+  user           User                @relation(fields: [userId], references: [id])
+  metadata       Json?
+  sessions       SuperAdminSession[]
   schoolSessions SchoolSession[]
 }
 
 // ------------------ SCHOOLS / TENANTS ------------------
 model SchoolSession {
-  id           Int       @id @default(autoincrement())
-  superAdminId Int
-  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [userId], onDelete: Cascade)
-  name         String
-  slug         String?   @unique
-  startDate    DateTime
-  endDate      DateTime
-  metadata     Json?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @default(now())
-  deletedAt    DateTime?
-  memberships  UserSchoolSession[]
-  classrooms   Classroom[]
-  courses      Course[]
+  id             Int                    @id @default(autoincrement())
+  superAdminId   Int
+  superAdmin     SuperAdmin             @relation(fields: [superAdminId], references: [userId], onDelete: Cascade)
+  name           String
+  slug           String?                @unique
+  startDate      DateTime
+  endDate        DateTime
+  metadata       Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @default(now())
+  deletedAt      DateTime?
+  memberships    UserSchoolSession[]
+  classrooms     Classroom[]
+  courses        Course[]
   transportation Transportation[]
-  resources    Resource[]
-  transactions FinancialTransaction[]
+  resources      Resource[]
+  transactions   FinancialTransaction[]
 }
-
 
 // ------------------ CORE USERS ------------------
 model User {
-  id                Int                   @id @default(autoincrement())
-  email             String                @unique
-  fullName          String
-  role              RoleType
-  humanId           String                @unique  
-  profilePicture    String?
-  lastLoginAt       DateTime?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  deletedAt         DateTime?
-  department        String?
-  userSessions      UserSession[]
+  id                 Int         @id @default(autoincrement())
+  email              String      @unique
+  fullName           String
+  role               RoleType
+  humanId            String      @unique
+  profilePicture     String?
+  lastLoginAt        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+  department         String?
+  classroomsTeaching Classroom[] @relation("TeacherClassrooms")
+
+  // Sessions & tokens
+  userSessions  UserSession[]
   refreshTokens RefreshToken[]
 
-  // Relations
-  memberships       UserSchoolSession[]
-  parentStudentRelations  ParentStudent[] @relation("ParentUserToParentStudent")
+  // Memberships
+  schoolMemberships UserSchoolSession[] // renamed from memberships
+  memberships       Membership[] // keep for Membership model
+
+  // Parent-Student relations
+  parentStudentRelations ParentStudent[] @relation("ParentUserToParentStudent")
 
   // Profiles
   studentProfile    StudentProfile?
@@ -219,25 +223,25 @@ model User {
   superAdminProfile SuperAdminProfile?
 
   // Graduation
-  graduationProcessed GraduationRecord[] @relation("GraduationProcessedBy")
-  graduationsProcessed GraduationBatch[] @relation("GraduationProcessedBy")
+  graduationProcessed  GraduationRecord[] @relation("GraduationProcessedBy")
+  graduationsProcessed GraduationBatch[]  @relation("GraduationProcessedBy")
 
   // Courses & Assignments
-  coursesTeaching   Course[]              @relation("CourseTeacher")
-  coursesEnrolled   Course[]              @relation("CourseStudents")
-  assignmentsGiven  Assignment[]          @relation("AssignmentTeacher")
-  assignmentsAssigned Assignment[]        @relation("AssignmentStudents")
+  coursesTeaching     Course[]     @relation("CourseTeacher")
+  coursesEnrolled     Course[]     @relation("CourseStudents")
+  assignmentsGiven    Assignment[] @relation("AssignmentTeacher")
+  assignmentsAssigned Assignment[] @relation("AssignmentStudents")
 
   // Finance
-  grades            Grade[]
-  purchases         Purchase[]
-  payments          Payment[]             @relation("UserPayments")
-  createdByFor      FinancialTransaction[] @relation("CreatedBy")
-  updatedByFor      FinancialTransaction[] @relation("UpdatedBy")
+  grades       Grade[]
+  purchases    Purchase[]
+  payments     Payment[]              @relation("UserPayments")
+  createdByFor FinancialTransaction[] @relation("CreatedBy")
+  updatedByFor FinancialTransaction[] @relation("UpdatedBy")
 
   // SuperAdmin extension
-  superAdminMeta    SuperAdmin?         
-  
+  superAdminMeta SuperAdmin?
+
   @@index([fullName])
   @@index([email])
   @@index([createdAt])
@@ -247,7 +251,7 @@ model User {
 
 model Membership {
   id        String   @id @default(uuid())
-  userId    String
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
   role      String
   password  String
@@ -259,25 +263,24 @@ model Membership {
 }
 
 model UserSchoolSession {
-  id               Int            @id @default(autoincrement())
-  humanId          String         @unique // e.g., SCH01-JDOE
-  schoolSessionId  Int
-  userId           Int
-  email            String
-  password         String
-  role             RoleType
-  active           Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id              Int      @id @default(autoincrement())
+  humanId         String   @unique // e.g., SCH01-JDOE
+  schoolSessionId Int
+  userId          Int
+  email           String
+  password        String
+  role            RoleType
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Relations
-  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  schoolSession    SchoolSession  @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolSession SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
 
   // --- Constraints ---
   @@unique([schoolSessionId, email])
   @@unique([schoolSessionId, userId])
-
   // --- Indexes for efficient filtering ---
   @@index([schoolSessionId])
   @@index([role])
@@ -291,341 +294,345 @@ model UserSchoolSession {
 // ------------------ SUPERADMIN PROFILE ------------------
 
 model SuperAdminProfile {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @unique
-  title     String?   // e.g., "Head of IT", "Founder", etc.
-  bio       String?
-  avatar    String?
+  id         Int     @id @default(autoincrement())
+  userId     Int     @unique
+  title      String? // e.g., "Head of IT", "Founder", etc.
+  bio        String?
+  avatar     String?
   department String?
-   name     String
+  name       String
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  updatedAt DateTime  @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
 }
-
 
 // Student
 model StudentProfile {
-  id              String             @id @default(cuid())
-  userId          Int?               @unique
-  admissionNumber String?            @unique
-   name           String
+  id              String        @id @default(cuid())
+  userId          Int?          @unique
+  admissionNumber String?       @unique
+  name            String
   admissionDate   DateTime?
   dateOfBirth     DateTime?
   gender          String?
   currentGrade    GradeLevel
-  status          StudentStatus      @default(ACTIVE)
+  status          StudentStatus @default(ACTIVE)
 
-  classroomId     String?
-  classroom       Classroom?         @relation(fields: [classroomId], references: [id])
+  classroomId String?
+  classroom   Classroom? @relation(fields: [classroomId], references: [id])
 
-  graduations     GraduationRecord[]
-  parents         ParentStudent[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @default(now())
+  graduations GraduationRecord[]
+  parents     ParentStudent[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @default(now())
 
-  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 // Teacher
 model TeacherProfile {
-  id              Int       @id @default(autoincrement())
-  userId          Int       @unique
-  employeeId      String    @unique
-  name            String
-  hireDate        DateTime
-  specialization  String?
-  qualification   String?
-  profilePicture  String?
-  department      String? 
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  bio            String?
+  title          String?
+  employeeId     String   @unique
+  name           String
+  hireDate       DateTime
+  specialization String?
+  qualification  String?
+  profilePicture String?
+  department     String?
 
-  user            User      @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 // Parent
 model ParentProfile {
-  id              Int       @id @default(autoincrement())
-  userId          Int       @unique
-  occupation      String?
-  phoneNumber     String?
-  address         String?
-  profilePicture  String?
-  name            String
+  id             Int     @id @default(autoincrement())
+  userId         Int     @unique
+  occupation     String?
+  phoneNumber    String?
+  address        String?
+  profilePicture String?
+  name           String
 
-  user            User      @relation(fields: [userId], references: [id])
-  students        ParentStudent[] @relation("ParentToStudent")
+  user     User            @relation(fields: [userId], references: [id])
+  students ParentStudent[] @relation("ParentToStudent")
 }
 
 // Staff
 model StaffProfile {
-  id              Int       @id @default(autoincrement())
-  userId          Int       @unique
-  employeeId      String    @unique
-   name           String
-  department      String?
-  hireDate        DateTime
-  profilePicture  String?
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  employeeId     String   @unique
+  name           String
+  department     String?
+  hireDate       DateTime
+  profilePicture String?
 
-  user            User      @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 // Parent-Student join
 model ParentStudent {
-  id              String           @id @default(cuid())
+  id              String @id @default(cuid())
   studentId       String
   parentProfileId Int
   parentUserId    Int
 
-  parentProfile   ParentProfile    @relation("ParentToStudent", fields: [parentProfileId], references: [id])
-  student         StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  parent          User             @relation("ParentUserToParentStudent", fields: [parentUserId], references: [id], onDelete: Cascade)
+  parentProfile ParentProfile  @relation("ParentToStudent", fields: [parentProfileId], references: [id])
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent        User           @relation("ParentUserToParentStudent", fields: [parentUserId], references: [id], onDelete: Cascade)
 
-  relationType    String?
-  createdAt       DateTime         @default(now())
+  relationType String?
+  createdAt    DateTime @default(now())
 
-  @@index([studentId])
-  @@index([parentUserId])
   @@unique([parentUserId, studentId])
   @@unique([studentId, parentProfileId])
+  @@index([studentId])
+  @@index([parentUserId])
 }
-
 
 // ------------------ CLASSROOMS ------------------
 
 model Classroom {
-  id              String            @id @default(cuid())
-  name            String
-  gradeLevel      GradeLevel
-  schoolSessionId Int
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @default(now())
+  id                String            @id @default(cuid())
+  name              String
+  gradeLevel        GradeLevel
+  schoolSessionId   Int
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @default(now())
   graduationBatches GraduationBatch[]
 
-  students        StudentProfile[]
-  schoolSession   SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  students      StudentProfile[]
+  schoolSession SchoolSession    @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
 
-  @@unique([schoolSessionId, name]) // makes classroom unique per session
-  @@unique([name, schoolSessionId])
+  teacherId Int?
+  teacher   User? @relation("TeacherClassrooms", fields: [teacherId], references: [id])
+
+  @@unique([schoolSessionId, name])
 }
 
 // ------------------ GRADUATION ------------------
 model GraduationBatch {
-  id             String            @id @default(cuid())
-  scope          GraduationScope
-  gradeLevel     GradeLevel
-  classroomId    String?
-  classroom      Classroom?        @relation(fields: [classroomId], references: [id])
-  year           Int
-  processedById  Int
-  processedBy    User              @relation("GraduationProcessedBy", fields: [processedById], references: [id], onDelete: Restrict)
+  id              String             @id @default(cuid())
+  scope           GraduationScope
+  gradeLevel      GradeLevel
+  classroomId     String?
+  classroom       Classroom?         @relation(fields: [classroomId], references: [id])
+  year            Int
+  processedById   Int // Keep as Int because onDelete: Restrict is fine
+  processedBy     User               @relation("GraduationProcessedBy", fields: [processedById], references: [id], onDelete: Restrict)
   processedByRole RoleType
-  records        GraduationRecord[]
-  createdAt      DateTime          @default(now())
+  records         GraduationRecord[]
+  createdAt       DateTime           @default(now())
 }
 
 model GraduationRecord {
-  id              String            @id @default(cuid())
-  studentId       String
-  student         StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  batchId         String
-  batch           GraduationBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  fromGrade       GradeLevel
-  toGrade         GradeLevel?
-  outcome         GraduationOutcome @default(PROMOTED)
-  processedById   Int
-  processedBy     User              @relation("GraduationProcessedBy", fields: [processedById], references: [id], onDelete: SetNull)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id            String            @id @default(cuid())
+  studentId     String
+  student       StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batchId       String
+  batch         GraduationBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  fromGrade     GradeLevel
+  toGrade       GradeLevel?
+  outcome       GraduationOutcome @default(PROMOTED)
+  processedById Int? // Make nullable for SetNull
+  processedBy   User?             @relation("GraduationProcessedBy", fields: [processedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @default(now()) @updatedAt
 }
 
 // ------------------ COURSES & ASSIGNMENTS ------------------
 model Course {
-  id               Int       @id @default(autoincrement())
-  schoolSessionId  Int
-  name             String
-  code             String?    // optional shorthand/code
-  description      String?
-  teacherId        Int?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @default(now())
-  deletedAt        DateTime?
+  id              Int       @id @default(autoincrement())
+  schoolSessionId Int
+  name            String
+  code            String? // optional shorthand/code
+  description     String?
+  teacherId       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now())
+  deletedAt       DateTime?
 
-  schoolSession    SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
-  teacher          User?         @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
-  students         User[]        @relation("CourseStudents")
-  assignments      Assignment[]
-  grades           Grade[]
+  schoolSession SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  teacher       User?         @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  students      User[]        @relation("CourseStudents")
+  assignments   Assignment[]
+  grades        Grade[]
+
   @@unique([code, schoolSessionId])
 }
 
 model Assignment {
-  id               Int            @id @default(autoincrement())
-  courseId         Int
-  title            String
-  description      String?
-  type             AssignmentType @default(HOMEWORK)
-  teacherId        Int?
-  dueDate          DateTime?
-  metadata         Json?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  deletedAt        DateTime?
+  id          Int            @id @default(autoincrement())
+  courseId    Int
+  title       String
+  description String?
+  type        AssignmentType @default(HOMEWORK)
+  teacherId   Int?
+  dueDate     DateTime?
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
 
-  course           Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  grades           Grade[]        @relation("AssignmentGrades")
-  teacher          User?          @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
-  students         User[]         @relation("AssignmentStudents")
-  submittedAt      DateTime?
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  grades      Grade[]   @relation("AssignmentGrades")
+  teacher     User?     @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  students    User[]    @relation("AssignmentStudents")
+  submittedAt DateTime?
+
   @@unique([title, courseId])
 }
 
 model Grade {
-  id            Int       @id @default(autoincrement())
-  userId        Int
-  courseId      Int
-  assignmentId  Int?
-  value         Float
-  maxValue      Float?
-  letter        String?
-  feedback      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  courseId     Int
+  assignmentId Int?
+  value        Float
+  maxValue     Float?
+  letter       String?
+  feedback     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  assignment    Assignment? @relation("AssignmentGrades", fields: [assignmentId], references: [id], onDelete: SetNull)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation("AssignmentGrades", fields: [assignmentId], references: [id], onDelete: SetNull)
+
   @@unique([userId, assignmentId])
 }
 
 // ------------------ TRANSPORTATION ------------------
 model Transportation {
-  id             Int           @id @default(autoincrement())
+  id              Int         @id @default(autoincrement())
   schoolSessionId Int
-  routeName      String
-  vehicleType    VehicleType
-  vehicleNumber  String?
-  driverName     String?
-  capacity       Int
-  departureTime  DateTime?
-  arrivalTime    DateTime?
-  stops          Json?         // ordered list of stops {name, lat, lng, eta}
-  metadata       Json?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @default(now())
-  deletedAt      DateTime?
+  routeName       String
+  vehicleType     VehicleType
+  vehicleNumber   String?
+  driverName      String?
+  capacity        Int
+  departureTime   DateTime?
+  arrivalTime     DateTime?
+  stops           Json? // ordered list of stops {name, lat, lng, eta}
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @default(now())
+  deletedAt       DateTime?
 
-  schoolSession  SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
-  stopsTable     TransportStop[]
+  schoolSession SchoolSession   @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  stopsTable    TransportStop[]
+
   @@unique([routeName, schoolSessionId])
 }
 
 model TransportStop {
-  id              Int            @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   transportationId Int
-  name            String
-  orderIndex      Int
-  lat             Decimal?       @db.Decimal(10, 7)
-  lng             Decimal?       @db.Decimal(10, 7)
-  eta             DateTime?
-  createdAt       DateTime       @default(now())
+  name             String
+  orderIndex       Int
+  lat              Decimal?  @db.Decimal(10, 7)
+  lng              Decimal?  @db.Decimal(10, 7)
+  eta              DateTime?
+  createdAt        DateTime  @default(now())
 
-  transportation  Transportation @relation(fields: [transportationId], references: [id], onDelete: Cascade)
+  transportation Transportation @relation(fields: [transportationId], references: [id], onDelete: Cascade)
+
   @@unique([transportationId, orderIndex])
 }
 
 // ------------------ RESOURCES & FINANCE ------------------
 model Resource {
-  id               Int               @id @default(autoincrement())
-  schoolSessionId  Int
-  sku              String?           @unique
-  name             String
-  description      String?
-  category         ResourceCategory  @default(OTHER)
-  price            Float
-  discountPercent  Float?
-  stockQuantity    Int               @default(0)
-  metadata         Json?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  deletedAt        DateTime?
+  id              Int              @id @default(autoincrement())
+  schoolSessionId Int
+  sku             String?          @unique
+  name            String
+  description     String?
+  category        ResourceCategory @default(OTHER)
+  price           Float
+  discountPercent Float?
+  stockQuantity   Int              @default(0)
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
 
-  schoolSession    SchoolSession     @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
-  purchases        Purchase[]
+  schoolSession SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  purchases     Purchase[]
 
   @@index([schoolSessionId])
 }
 
 model Purchase {
-  id               Int                 @id @default(autoincrement())
-  resourceId       Int
-  buyerId          Int?
-  quantity         Int                 @default(1)
-  unitPrice        Float
-  discountPercent  Float?
-  totalAmount      Float
-  currency         String              @default("USD")
-  status           PaymentStatus       @default(PENDING)
-  metadata         Json?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id              Int           @id @default(autoincrement())
+  resourceId      Int
+  buyerId         Int?
+  quantity        Int           @default(1)
+  unitPrice       Float
+  discountPercent Float?
+  totalAmount     Float
+  currency        String        @default("USD")
+  status          PaymentStatus @default(PENDING)
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  resource         Resource            @relation(fields: [resourceId], references: [id], onDelete: Restrict)
-  buyer            User?               @relation(fields: [buyerId], references: [id], onDelete: SetNull)
-  payments         Payment[]           @relation("PurchasePayments")
+  resource Resource  @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  buyer    User?     @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  payments Payment[] @relation("PurchasePayments")
 
   @@unique([resourceId, buyerId])
   @@index([resourceId])
   @@index([buyerId])
   @@index([status])
-
-  }
+}
 
 model FinancialTransaction {
-  id               Int              @id @default(autoincrement())
-  schoolSessionId  Int
-  type             TransactionType
-  reference        String?
-  amount           Float
-  currency         String           @default("USD")
-  status           PaymentStatus
-  metadata         Json?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  createdById      Int?
-  updatedById      Int?
-  deletedAt        DateTime?
+  id              Int             @id @default(autoincrement())
+  schoolSessionId Int
+  type            TransactionType
+  reference       String?
+  amount          Float
+  currency        String          @default("USD")
+  status          PaymentStatus
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  createdById     Int?
+  updatedById     Int?
+  deletedAt       DateTime?
 
-  schoolSession    SchoolSession    @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
-  createdBy        User?            @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy        User?            @relation("UpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  payments         Payment[]        @relation("TransactionPayments")
-  
+  schoolSession SchoolSession @relation(fields: [schoolSessionId], references: [id], onDelete: Cascade)
+  createdBy     User?         @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy     User?         @relation("UpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  payments      Payment[]     @relation("TransactionPayments")
+
+  @@unique([schoolSessionId, type, createdById])
   @@index([schoolSessionId])
   @@index([type])
   @@index([status])
   @@index([createdById])
-
-  @@unique([schoolSessionId, type, createdById])
 }
 
-
 model Payment {
-  id                Int                @id @default(autoincrement())
-  transactionId     Int?
-  purchaseId        Int?
-  userId            Int?
-  gateway           String?
-  gatewayRef        String?
-  amount            Float
-  currency          String             @default("GHC")
-  status            PaymentStatus
-  metadata          Json?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id            Int           @id @default(autoincrement())
+  transactionId Int?
+  purchaseId    Int?
+  userId        Int?
+  gateway       String?
+  gatewayRef    String?
+  amount        Float
+  currency      String        @default("GHC")
+  status        PaymentStatus
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  transaction       FinancialTransaction? @relation("TransactionPayments", fields: [transactionId], references: [id], onDelete: SetNull)
-  purchase          Purchase?            @relation("PurchasePayments", fields: [purchaseId], references: [id], onDelete: SetNull)
-  user              User?                @relation("UserPayments", fields: [userId], references: [id], onDelete: SetNull)
+  transaction FinancialTransaction? @relation("TransactionPayments", fields: [transactionId], references: [id], onDelete: SetNull)
+  purchase    Purchase?             @relation("PurchasePayments", fields: [purchaseId], references: [id], onDelete: SetNull)
+  user        User?                 @relation("UserPayments", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([transactionId])
   @@index([purchaseId])
@@ -633,7 +640,6 @@ model Payment {
   @@index([status])
   @@index([gateway])
 }
-
 
 model AuditLog {
   id        Int      @id @default(autoincrement())
@@ -647,10 +653,10 @@ model AuditLog {
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  token     String   @unique                     // Fast lookup and uniqueness
-  userId    String
+  token     String   @unique // Fast lookup and uniqueness
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  familyId  String                                  // Links tokens in the same family
+  familyId  String // Links tokens in the same family
   revoked   Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -659,4 +665,3 @@ model RefreshToken {
   @@index([familyId])
   @@index([userId])
 }
-

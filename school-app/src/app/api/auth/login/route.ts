@@ -2,9 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma/prisma";
-import { generateAccessToken, generateRefreshToken, getRefreshTokenExpiry, parseDuration, env } from "@/lib/jwt";
+import { generateAccessToken, generateRefreshToken, getRefreshTokenExpiry, parseDuration } from "@/lib/jwt";
 import { v4 as uuidv4 } from "uuid";
-
+import { env } from "@/lib/env";
+ 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();

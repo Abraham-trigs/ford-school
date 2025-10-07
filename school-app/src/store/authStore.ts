@@ -1,54 +1,69 @@
-"use client";
+// /store/authStore.ts
+import { create } from "zustand";
+import { apiGet, apiPost } from "@/lib/apiWrapper";
 
-import { useRouter } from "next/navigation";
-import { useSessionStore } from "./sessionStore";
-
-interface AuthActions {
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
 }
 
-export const useAuthStore = (): AuthActions => {
-  const router = useRouter();
-  const { setToken, clearSession, refreshProfile } = useSessionStore.getState();
+interface AuthState {
+  user: User | null;
+  accessToken: string | null;
+  isLoading: boolean;
+  hydrated: boolean;
+  refreshUser: () => Promise<void>;
+  logout: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  setAccessToken: (token: string) => void;
+}
 
-  return {
-    login: async (email: string, password: string) => {
-      if (!email || !password) throw new Error("Email and password are required");
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  accessToken: null,
+  isLoading: false, // Prevent initial flicker
+  hydrated: false,
 
-      try {
-        const res = await fetch("/api/sessions/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-          credentials: "include", // include cookies
-        });
+  setAccessToken: (token: string) => set({ accessToken: token }),
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Login failed");
+  refreshUser: async () => {
+    set({ isLoading: true });
+    try {
+      const data = await apiGet<{ user: User }>("/auth/profile");
+      set({ user: data?.user ?? null });
+    } catch {
+      set({ user: null });
+    } finally {
+      set({ isLoading: false, hydrated: true });
+    }
+  },
 
-        // ✅ Save token and refresh profile
-        setToken(data.token);
-        const profile = await refreshProfile();
+  logout: async () => {
+    set({ isLoading: true });
+    try {
+      await apiPost("/auth/logout");
+    } finally {
+      set({ user: null, accessToken: null, isLoading: false });
+    }
+  },
 
-        // 🧠 Debug: verify fetched data
-        console.log("✅ Login successful — fetched profile:", profile);
-
-        const role = profile?.roles?.[0];
-        console.log("🧩 Detected role:", role);
-
-        // ✅ Redirect by role
-        if (role === "SUPERADMIN") router.push("dashboard/superadmin/dashboard");
-        else if (role === "TEACHER") router.push("dashboard/teacher/dashboard");
-        else if (role === "STUDENT") router.push("dashboard/student/dashboard");
-        else if (role === "PARENT") router.push("dashboard/parent/dashboard");
-        else console.warn("⚠️ Unknown role, staying on same page");
-      } catch (err: any) {
-        console.error("❌ Login error:", err.message || err);
-        throw err;
-      }
-    },
-
-    logout: () => clearSession(),
-  };
-};
+  login: async (email: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const data = await apiPost<{ user: User; accessToken: string }>("/auth/login", {
+        email: email.trim(),
+        password,
+      });
+      set({
+        user: data.user,
+        accessToken: data.accessToken,
+        hydrated: true,
+        isLoading: false,
+      });
+    } catch (err) {
+      set({ user: null, accessToken: null, hydrated: true, isLoading: false });
+      throw err; // re-throw to let login page catch and display error
+    }
+  },
+}));

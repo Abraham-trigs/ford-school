@@ -1,29 +1,31 @@
 "use client";
 
-import { useState, KeyboardEvent } from "react";
+import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { useSessionStore } from "@/store/sessionStore";
 import LoaderModal from "@/components/layout/LoaderModal";
 import { Eye, EyeOff } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login } = useAuthStore();
-  const { loading } = useSessionStore();
+  const { login, isLoading: authLoading } = useAuthStore();
+  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (localLoading || loading) return;
+  const handleLogin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (localLoading || authLoading) return;
+
     setLocalLoading(true);
     try {
-      await login(email.trim(), password);
+      await login(email, password);
       toast.success("Logged in successfully!");
       setPassword("");
-      // ✅ Redirect handled automatically in sessionStore
+      router.push("/dashboard");
     } catch (err: any) {
       toast.error(err.message || "Login failed");
     } finally {
@@ -31,11 +33,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleLogin();
-  };
-
-  if (localLoading || loading)
+  if (localLoading || authLoading)
     return <LoaderModal isVisible text="Logging in..." />;
 
   return (
@@ -51,40 +49,45 @@ export default function LoginPage() {
             Login
           </h2>
 
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full mb-4 bg-deepest text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
-            value={email}
-            onChange={(e) => setEmail(e.target.value.trimStart())}
-            onKeyDown={handleKeyDown}
-          />
-
-          <div className="relative w-full mb-6">
+          <form onSubmit={handleLogin}>
             <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              className="w-full bg-deepest text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={handleKeyDown}
+              type="email"
+              placeholder="Email"
+              className="w-full mb-4 bg-deepest text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple"
+              value={email}
+              onChange={(e) => setEmail(e.target.value.trim())}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute inset-y-0 right-3 flex items-center text-lightGray hover:text-accentTeal"
-            >
-              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
-          </div>
 
-          <button
-            onClick={handleLogin}
-            disabled={localLoading || loading}
-            className="w-full px-6 py-3 bg-greener text-secondary rounded-lg font-semibold hover:bg-accentPurple transition-colors duration-300 disabled:opacity-50"
-          >
-            Login
-          </button>
+            <div className="relative w-full mb-6">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                className="w-full bg-deepest text-lightGray rounded px-3 py-2 outline-none focus:ring-2 focus:ring-accentPurple pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-3 flex items-center text-lightGray hover:text-accentTeal"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={localLoading || authLoading}
+              className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors duration-300
+                ${
+                  localLoading || authLoading
+                    ? "bg-gray-500 text-secondary opacity-50 cursor-not-allowed"
+                    : "bg-greener text-secondary hover:bg-accentPurple"
+                }`}
+            >
+              {localLoading || authLoading ? "Logging in..." : "Login"}
+            </button>
+          </form>
         </div>
       </main>
     </>

@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma/prisma";
-import { env, AuthPayload } from "@/lib/jwt";
+import { AuthPayload } from "@/lib/jwt";
+import { env } from "@/lib/env"
 
 export async function GET(req: NextRequest) {
   try {

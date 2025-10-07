@@ -11,33 +11,46 @@ import { Prisma } from "@prisma/client";
  *   import { prisma } from "@/lib/prisma/prisma";
  *   prisma.$use(softDeleteMiddleware);
  */
-
 export const softDeleteMiddleware: Prisma.Middleware = async (params, next) => {
   const { action, model, args } = params;
 
-  // ✅ Handle queries that should automatically exclude soft-deleted records
-  if (
-    action.startsWith("find") &&
-    model &&
-    !(args?.where?.includeDeleted === true)
-  ) {
-    if (!args.where) args.where = {};
-    args.where.deletedAt = null;
+  // List of actions to be affected
+  const findActions = ["findUnique", "findUniqueOrThrow", "findFirst", "findFirstOrThrow", "findMany"];
+  const deleteActions = ["delete", "deleteMany"];
+
+  // 1. Intercept find queries to exclude soft-deleted records
+  if (model && findActions.includes(action)) {
+    // Check if args.where is defined; if not, initialize it
+    if (!params.args.where) {
+      params.args.where = {};
+    }
+
+    // Bypass soft-delete logic if 'includeDeleted: true' is explicitly set
+    if (params.args.where.includeDeleted === true) {
+      delete params.args.where.includeDeleted;
+      return next(params);
+    }
+    
+    // Add the deletedAt filter to the where clause
+    params.args.where.deletedAt = null;
   }
 
-  // ✅ Intercept single deletes
-  if (action === "delete" && model) {
-    params.action = "update";
-    params.args["data"] = { deletedAt: new Date() };
+  // 2. Intercept delete queries and convert them to update queries
+  if (model && deleteActions.includes(action)) {
+    // For `delete`
+    if (action === "delete") {
+      params.action = "update";
+      // Ensure data object exists and set deletedAt
+      params.args.data = { deletedAt: new Date() };
+    }
+
+    // For `deleteMany`
+    if (action === "deleteMany") {
+      params.action = "updateMany";
+      // Ensure data object exists and set deletedAt
+      params.args.data = { ...params.args.data, deletedAt: new Date() };
+    }
   }
 
-  // ✅ Intercept bulk deletes
-  if (action === "deleteMany" && model) {
-    params.action = "updateMany";
-    if (!params.args.data) params.args["data"] = {};
-    params.args["data"]["deletedAt"] = new Date();
-  }
-
-  // ✅ Pass through
   return next(params);
 };
