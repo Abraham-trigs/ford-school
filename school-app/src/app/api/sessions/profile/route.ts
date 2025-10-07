@@ -1,102 +1,46 @@
-// app/api/sessions/profile/route.ts
+// app/api/auth/profile/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma/prisma";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET!;
+import { prisma } from "@/lib/prisma/prisma";
+import { env, AuthPayload } from "@/lib/jwt";
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      console.warn("⚠️ No token cookie found in request");
-      return NextResponse.json({ user: null });
-    }
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) return NextResponse.json({ user: null }, { status: 401 });
 
-    let payload: any;
-    try {
-      payload = jwt.verify(token, JWT_SECRET);
-    } catch (err) {
-      console.warn("❌ Invalid or expired token:", err);
-      return NextResponse.json({ user: null });
-    }
+    const token = authHeader.replace("Bearer ", "");
+    let payload: AuthPayload;
+    try { payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload; }
+    catch { return NextResponse.json({ user: null }, { status: 401 }); }
 
-    // ✅ Fetch only base user and memberships
-    const baseUser = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      include: { memberships: true },
+      include: {
+        memberships: true,
+        superAdminProfile: true,
+        teacherProfile: true,
+        studentProfile: true,
+        parentProfile: true,
+        staffProfile: true,
+      },
     });
 
-    if (!baseUser) {
-      console.warn("⚠️ No user found for token payload:", payload);
-      return NextResponse.json({ user: null });
-    }
+    if (!user) return NextResponse.json({ user: null }, { status: 401 });
 
-    const primaryRole =
-      baseUser.memberships[0]?.role || payload.role || "GUEST";
-
-    let roleProfile: any = null;
-
-    // ✅ Fetch role-specific profile only (no redundant queries)
+    let primaryProfile = null;
+    const primaryRole = user.memberships[0]?.role;
     switch (primaryRole) {
-      case "SUPERADMIN":
-        roleProfile = await prisma.superAdminProfile.findUnique({
-          where: { userId: baseUser.id },
-        });
-        break;
-
-      case "TEACHER":
-        roleProfile = await prisma.teacherProfile.findUnique({
-          where: { userId: baseUser.id },
-        });
-        break;
-
-      case "STUDENT":
-        roleProfile = await prisma.studentProfile.findUnique({
-          where: { userId: baseUser.id },
-        });
-        break;
-
-      case "PARENT":
-        roleProfile = await prisma.parentProfile.findUnique({
-          where: { userId: baseUser.id },
-        });
-        break;
-
-      case "STAFF":
-        roleProfile = await prisma.staffProfile.findUnique({
-          where: { userId: baseUser.id },
-        });
-        break;
-
-      default:
-        roleProfile = null;
+      case "SUPERADMIN": primaryProfile = user.superAdminProfile; break;
+      case "TEACHER": primaryProfile = user.teacherProfile; break;
+      case "STUDENT": primaryProfile = user.studentProfile; break;
+      case "PARENT": primaryProfile = user.parentProfile; break;
+      case "STAFF": primaryProfile = user.staffProfile; break;
     }
 
-    // ✅ Unified profile response (consistent structure)
-    const profile = {
-      id: baseUser.id,
-      email: baseUser.email,
-      fullName: baseUser.fullName,
-      profilePicture: baseUser.profilePicture,
-      roles: baseUser.memberships.map((m) => m.role),
-      memberships: baseUser.memberships.map((m) => ({
-        id: m.id,
-        role: m.role,
-      })),
-      primaryRole,
-      roleProfile: roleProfile
-        ? {
-            ...roleProfile,
-            createdAt: roleProfile.createdAt?.toISOString?.(),
-            updatedAt: roleProfile.updatedAt?.toISOString?.(),
-          }
-        : undefined,
-    };
-
-    return NextResponse.json({ user: profile });
+    return NextResponse.json({ user: { ...user, primaryProfile } });
   } catch (err) {
-    console.error("❌ Unexpected /sessions/profile error:", err);
-    return NextResponse.json({ user: null });
+    console.error("[ProfileRoute] Error:", err);
+    return NextResponse.json({ user: null }, { status: 500 });
   }
 }

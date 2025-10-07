@@ -1,67 +1,46 @@
 // app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma/prisma";
-
-const JWT_SECRET = process.env.JWT_SECRET!;
-
+import { generateAccessToken, generateRefreshToken, getRefreshTokenExpiry, parseDuration, env } from "@/lib/jwt";
+import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
+    if (!email || !password) return NextResponse.json({ message: "Authentication failed" }, { status: 401 });
 
-    if (!email || !password) {
-      return NextResponse.json({ message: "Email and password required" }, { status: 400 });
-    }
-
-    // 1️⃣ Fetch the User
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { memberships: true }, // includes UserSchoolSession(s)
+      include: { memberships: { where: { active: true } } },
     });
 
-    if (!user || user.memberships.length === 0) {
-      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
-    }
+    if (!user || user.memberships.length === 0) return NextResponse.json({ message: "Authentication failed" }, { status: 401 });
 
-    // 2️⃣ Pick the active UserSchoolSession (for current login)
-    const activeSession = user.memberships.find((s) => s.active);
-    if (!activeSession) {
-      return NextResponse.json({ message: "No active session for this user" }, { status: 403 });
-    }
+    const valid = await bcrypt.compare(password, user.memberships[0].password);
+    if (!valid) return NextResponse.json({ message: "Authentication failed" }, { status: 401 });
 
-    // 3️⃣ Compare passwords
-    const isValid = await bcrypt.compare(password, activeSession.password);
-    if (!isValid) {
-      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
-    }
+    const familyId = uuidv4();
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user, familyId);
+    const expiresAt = getRefreshTokenExpiry();
 
-    // 4️⃣ Generate JWT
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        role: activeSession.role,
-        schoolSessionId: activeSession.schoolSessionId,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    await prisma.refreshToken.create({ data: { token: refreshToken, userId: user.id, familyId, expiresAt } });
 
-    // 5️⃣ Set cookie
-    const res = NextResponse.json({ message: "Login successful" });
+    const res = NextResponse.json({ accessToken });
     res.cookies.set({
-      name: "token",
-      value: token,
+      name: "refreshToken",
+      value: refreshToken,
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: parseDuration(env.JWT_REFRESH_EXPIRES_IN),
     });
 
     return res;
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error("[LoginRoute] Error:", err);
+    return NextResponse.json({ message: "Authentication failed" }, { status: 401 });
   }
 }
-

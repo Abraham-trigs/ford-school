@@ -205,6 +205,7 @@ model User {
   deletedAt         DateTime?
   department        String?
   userSessions      UserSession[]
+  refreshTokens RefreshToken[]
 
   // Relations
   memberships       UserSchoolSession[]
@@ -244,6 +245,19 @@ model User {
   @@index([department])
 }
 
+model Membership {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  role      String
+  password  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model UserSchoolSession {
   id               Int            @id @default(autoincrement())
   humanId          String         @unique // e.g., SCH01-JDOE
@@ -275,6 +289,7 @@ model UserSchoolSession {
 // ------------------ PROFILES ------------------
 
 // ------------------ SUPERADMIN PROFILE ------------------
+
 model SuperAdminProfile {
   id        Int       @id @default(autoincrement())
   userId    Int       @unique
@@ -282,6 +297,7 @@ model SuperAdminProfile {
   bio       String?
   avatar    String?
   department String?
+   name     String
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   updatedAt DateTime  @updatedAt
@@ -293,6 +309,7 @@ model StudentProfile {
   id              String             @id @default(cuid())
   userId          Int?               @unique
   admissionNumber String?            @unique
+   name           String
   admissionDate   DateTime?
   dateOfBirth     DateTime?
   gender          String?
@@ -315,6 +332,7 @@ model TeacherProfile {
   id              Int       @id @default(autoincrement())
   userId          Int       @unique
   employeeId      String    @unique
+  name            String
   hireDate        DateTime
   specialization  String?
   qualification   String?
@@ -332,6 +350,7 @@ model ParentProfile {
   phoneNumber     String?
   address         String?
   profilePicture  String?
+  name            String
 
   user            User      @relation(fields: [userId], references: [id])
   students        ParentStudent[] @relation("ParentToStudent")
@@ -342,6 +361,7 @@ model StaffProfile {
   id              Int       @id @default(autoincrement())
   userId          Int       @unique
   employeeId      String    @unique
+   name           String
   department      String?
   hireDate        DateTime
   profilePicture  String?
@@ -623,5 +643,20 @@ model AuditLog {
   entityId  Int?
   details   Json?
   createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique                     // Fast lookup and uniqueness
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  familyId  String                                  // Links tokens in the same family
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([userId])
 }
 

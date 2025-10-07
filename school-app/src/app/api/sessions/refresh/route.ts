@@ -1,65 +1,51 @@
+// app/api/auth/refresh/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { prisma } from "@/lib/prisma"; // your Prisma client
-import { AuthPayload } from "@/lib/auth";
-
-const JWT_SECRET = process.env.JWT_SECRET!;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
+import { prisma } from "@/lib/prisma/prisma";
+import { generateAccessToken, generateRefreshToken, getRefreshTokenExpiry, parseDuration, env } from "@/lib/jwt";
 
 export async function POST(req: NextRequest) {
   try {
-    const refreshToken = req.cookies.get("refreshToken")?.value;
-    if (!refreshToken) {
-      return NextResponse.json({ message: "No refresh token" }, { status: 401 });
+    const oldToken = req.cookies.get("refreshToken")?.value;
+    if (!oldToken) return NextResponse.json({ message: "No refresh token" }, { status: 401 });
+
+    let payload: any;
+    try { payload = jwt.verify(oldToken, env.JWT_REFRESH_SECRET); }
+    catch { return NextResponse.json({ message: "Invalid refresh token" }, { status: 401 }); }
+
+    const storedToken = await prisma.refreshToken.findUnique({ where: { token: oldToken } });
+    if (!storedToken || storedToken.revoked || storedToken.expiresAt < new Date()) {
+      if (storedToken?.familyId) {
+        await prisma.refreshToken.updateMany({ where: { familyId: storedToken.familyId }, data: { revoked: true } });
+      }
+      return NextResponse.json({ message: "Refresh token invalidated" }, { status: 401 });
     }
 
-    // Verify refresh token
-    let payload: AuthPayload;
-    try {
-      payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as AuthPayload;
-    } catch {
-      return NextResponse.json({ message: "Invalid or expired refresh token" }, { status: 401 });
-    }
+    const familyId = storedToken.familyId!;
+    const user = await prisma.user.findUnique({ where: { id: storedToken.userId }, include: { memberships: true } });
+    if (!user) return NextResponse.json({ message: "User not found" }, { status: 401 });
 
-    // ✅ DB check: ensure user exists and is active
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-    });
+    const newRefreshToken = generateRefreshToken(user, familyId);
+    const newAccessToken = generateAccessToken(user);
+    const expiresAt = getRefreshTokenExpiry();
 
-    if (!user || !user.active) {
-      return NextResponse.json({ message: "User not found or deactivated" }, { status: 401 });
-    }
+    await prisma.$transaction([
+      prisma.refreshToken.update({ where: { token: oldToken }, data: { revoked: true } }),
+      prisma.refreshToken.create({ data: { token: newRefreshToken, userId: user.id, familyId, expiresAt } }),
+    ]);
 
-    // Generate new access token
-    const accessToken = jwt.sign(
-      { userId: user.id, roles: user.roles, email: user.email },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
-
-    // Rotate refresh token
-    const newRefreshToken = jwt.sign(
-      { userId: user.id, roles: user.roles, email: user.email },
-      JWT_REFRESH_SECRET,
-      { expiresIn: JWT_REFRESH_EXPIRES_IN }
-    );
-
-    const response = NextResponse.json({ accessToken });
-
-    // Set httpOnly cookie for refresh token
-    response.cookies.set({
+    const res = NextResponse.json({ accessToken: newAccessToken });
+    res.cookies.set({
       name: "refreshToken",
       value: newRefreshToken,
       httpOnly: true,
-      path: "/",
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: parseInt(JWT_REFRESH_EXPIRES_IN) || 7 * 24 * 60 * 60,
+      path: "/",
+      maxAge: parseDuration(env.JWT_REFRESH_EXPIRES_IN),
     });
 
-    return response;
+    return res;
   } catch (err) {
     console.error("[RefreshRoute] Error:", err);
     return NextResponse.json({ message: "Internal server error" }, { status: 500 });
