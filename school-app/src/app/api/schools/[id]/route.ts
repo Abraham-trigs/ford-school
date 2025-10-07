@@ -1,92 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma/prisma";
 import { authenticate } from "@/lib/auth";
-import { z } from "zod";
+import { schoolService } from "@/services/schoolService";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 
-const allowedRoles = ["SUPERADMIN", "ADMIN"];
+interface Params {
+  id: string;
+}
 
-// Zod schema for PUT
-const updateSchoolSchema = z.object({
-  name: z.string().optional(),
-  address: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-});
-
-// GET /api/schools/:id
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * GET /api/schools/[id]
+ * Returns a single school by ID
+ */
+export async function GET(req: NextRequest, { params }: { params: Params }) {
   try {
-    const { roles, userId } = authenticate(req);
-    const schoolId = parseInt(params.id);
-    if (isNaN(schoolId)) return NextResponse.json({ error: "Invalid school ID" }, { status: 400 });
-
-    if (!roles.includes("SUPERADMIN")) {
-      const membership = await prisma.userSchoolSession.findFirst({
-        where: { userId, schoolSessionId: schoolId, active: true },
-      });
-      if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const school = await prisma.schoolSession.findUnique({ where: { id: schoolId } });
-    if (!school) return NextResponse.json({ error: "School not found" }, { status: 404 });
-
-    return NextResponse.json({ data: school });
-  } catch (err) {
-    console.error(err);
+    const user = authenticate(req);
+    const result = await schoolService.getSchool(user, params.id);
+    return NextResponse.json(result.data, { status: result.status });
+  } catch (err: any) {
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err instanceof NotFoundError) return NextResponse.json({ error: err.message }, { status: 404 });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// PUT /api/schools/:id
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * PUT /api/schools/[id]
+ * Updates a school
+ */
+export async function PUT(req: NextRequest, { params }: { params: Params }) {
   try {
-    const { roles } = authenticate(req);
-    if (!roles.some(r => allowedRoles.includes(r)))
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    const schoolId = parseInt(params.id);
-    if (isNaN(schoolId)) return NextResponse.json({ error: "Invalid school ID" }, { status: 400 });
-
+    const user = authenticate(req);
     const body = await req.json();
-    const parseResult = updateSchoolSchema.safeParse(body);
-    if (!parseResult.success)
-      return NextResponse.json({ error: parseResult.error.errors }, { status: 400 });
-
-    const { name, address, startDate, endDate } = parseResult.data;
-    const updatedSchool = await prisma.schoolSession.update({
-      where: { id: schoolId },
-      data: {
-        name,
-        address,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-      },
-    });
-
-    return NextResponse.json({ data: updatedSchool });
-  } catch (err) {
-    console.error(err);
+    const result = await schoolService.updateSchool(user, params.id, body);
+    return NextResponse.json(result.data, { status: result.status });
+  } catch (err: any) {
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err instanceof NotFoundError) return NextResponse.json({ error: err.message }, { status: 404 });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// DELETE /api/schools/:id
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * DELETE /api/schools/[id]
+ * Soft-deletes a school
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Params }) {
   try {
-    const { roles } = authenticate(req);
-    if (!roles.includes("SUPERADMIN")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    const schoolId = parseInt(params.id);
-    if (isNaN(schoolId)) return NextResponse.json({ error: "Invalid school ID" }, { status: 400 });
-
-    const deletedSchool = await prisma.schoolSession.update({
-      where: { id: schoolId },
-      data: { deletedAt: new Date() },
-    });
-
-    return NextResponse.json({ data: { id: deletedSchool.id, deletedAt: deletedSchool.deletedAt } });
-  } catch (err) {
-    console.error(err);
+    const user = authenticate(req);
+    const result = await schoolService.deleteSchool(user, params.id);
+    return NextResponse.json(result.data, { status: result.status });
+  } catch (err: any) {
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err instanceof NotFoundError) return NextResponse.json({ error: err.message }, { status: 404 });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,104 +1,90 @@
-// /api/staff/route.ts
+// /app/api/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma/prisma";
-import { authenticate } from "@/lib/auth";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { authenticate } from "@/lib/auth";
+import { handleError, ApiError } from "@/lib/utils/error";
+import { userService } from "@/lib/services/userService";
+import { rateLimiter } from "@/lib/ratelimit";
 
-const staffRoles = [
-  "FINANCE","HR","RECEPTIONIST","IT_SUPPORT","TRANSPORT",
-  "NURSE","COOK","CLEANER","SECURITY","MAINTENANCE"
-];
-
-// Zod schemas
-const getQuerySchema = z.object({
-  role: z.enum(staffRoles).optional(),
-  page: z.string().regex(/^\d+$/).optional(),
-  pageSize: z.string().regex(/^\d+$/).optional(),
+/* -------------------------
+   Zod schemas (route-level)
+   - route validates incoming request; service trusts validated shape
+   ------------------------- */
+const querySchema = z.object({
+  search: z.string().optional(),
+  role: z.string().optional(),
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).default(20),
 });
 
-const postBodySchema = z.object({
-  email: z.string().email(),
-  fullName: z.string().min(2),
-  password: z.string().min(8),
-  profilePicture: z.string().url().optional(),
-  role: z.enum(staffRoles),
-  schoolSessionId: z.string().uuid(),
-  profileData: z.record(z.any()).optional(),
-});
+const createUserSchema = z
+  .object({
+    email: z.string().email(),
+    fullName: z.string().min(2),
+    password: z.string().min(8),
+    profilePicture: z.string().optional(),
+    role: z.string(),
+    schoolSessionId: z.number().optional(),
+    profileData: z.record(z.any()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // reuse central roles list from config if desired (import to keep small)
+    const rolesWithSchool = [
+      "ADMIN","PRINCIPAL","VICE_PRINCIPAL","TEACHER","ASSISTANT_TEACHER",
+      "COUNSELOR","LIBRARIAN","EXAM_OFFICER","FINANCE","HR","RECEPTIONIST",
+      "IT_SUPPORT","TRANSPORT","NURSE","COOK","CLEANER","SECURITY","MAINTENANCE",
+      "STUDENT","CLASS_REP","PARENT",
+    ];
+    if (rolesWithSchool.includes(data.role) && !data.schoolSessionId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "schoolSessionId is required for this role",
+      });
+    }
+  });
 
+/* -------------------------
+   GET handler
+   - thin: auth + validation -> delegate to service
+   ------------------------- */
 export async function GET(req: NextRequest) {
   try {
-    const payload = authenticate(req, ["SUPERADMIN","ADMIN"]);
-    const { roles, userId } = payload;
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const params = Object.fromEntries(new URL(req.url).searchParams.entries());
+    const q = querySchema.parse(params);
 
-    const url = new URL(req.url);
-    const query = getQuerySchema.parse(Object.fromEntries(url.searchParams.entries()));
-    const { role: roleFilter, page = "1", pageSize = "20" } = query;
-
-    const where: any = { role: { in: staffRoles } };
-    if (roleFilter) where.role = roleFilter;
-
-    // Restrict to active sessions for non-SUPERADMIN
-    if (!roles.includes("SUPERADMIN")) {
-      const memberships = await prisma.userSchoolSession.findMany({
-        where: { userId, active: true },
-        select: { schoolSessionId: true },
-      });
-      const allowedIds = memberships.map(m => m.schoolSessionId);
-      where.memberships = { some: { schoolSessionId: { in: allowedIds }, active: true } };
-    }
-
-    const staff = await prisma.staffProfile.findMany({
-      where,
-      include: { user: true, memberships: { include: { schoolSession: true } } },
-      skip: (parseInt(page)-1)*parseInt(pageSize),
-      take: parseInt(pageSize),
-      orderBy: { createdAt: "desc" },
+    const result = await userService.getUsers({
+      requester: { userId: payload.userId, roles: payload.roles },
+      query: q,
     });
 
-    return NextResponse.json({ data: staff, meta: { page: parseInt(page), pageSize: parseInt(pageSize) } });
+    return NextResponse.json(result);
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err instanceof z.ZodError ? err.errors : err.message || "Internal server error" }, { status: 400 });
+    return handleError(err, "GET /api/users");
   }
 }
 
+/* -------------------------
+   POST handler
+   - route-level write rate limit + auth
+   ------------------------- */
 export async function POST(req: NextRequest) {
   try {
-    const payload = authenticate(req, ["SUPERADMIN","ADMIN"]);
-    const { roles, userId: requesterId } = payload;
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
 
-    const body = postBodySchema.parse(await req.json());
-    const { email, fullName, password, profilePicture, role, schoolSessionId, profileData } = body;
+    const rl = await rateLimiter.limit(String(payload.userId));
+    if (!rl.success) throw new ApiError(429, "Too many requests");
 
-    // Check management rights
-    const isAdmin = roles.includes("SUPERADMIN") || await prisma.userSchoolSession.findFirst({
-      where: { userId: requesterId, schoolSessionId, active: true },
-    });
-    if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const body = await req.json();
+    const parsed = createUserSchema.parse(body);
 
-    const hashed = await bcrypt.hash(password, 12);
-
-    const staffUser = await prisma.$transaction(async tx => {
-      const user = await tx.user.create({ data: { email, fullName, profilePicture } });
-
-      await tx.userSchoolSession.create({
-        data: { userId: user.id, email, password: hashed, role, schoolSessionId, active: true },
-      });
-
-      await tx.staffProfile.create({ data: { ...profileData, userId: user.id } });
-      return user;
-    });
-
-    const created = await prisma.staffProfile.findFirst({
-      where: { userId: staffUser.id },
-      include: { user: true, memberships: { include: { schoolSession: true } } },
+    const created = await userService.createUser({
+      requester: { userId: payload.userId, roles: payload.roles },
+      data: parsed,
     });
 
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err instanceof z.ZodError ? err.errors : err.message || "Internal server error" }, { status: 400 });
+    return handleError(err, "POST /api/users");
   }
 }

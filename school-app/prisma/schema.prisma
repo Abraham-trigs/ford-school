@@ -613,3 +613,15 @@ model Payment {
   @@index([status])
   @@index([gateway])
 }
+
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  entity    String
+  entityId  Int?
+  details   Json?
+  createdAt DateTime @default(now())
+}
+
