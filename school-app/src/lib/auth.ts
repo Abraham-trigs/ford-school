@@ -1,67 +1,57 @@
+// /lib/auth.ts
 import { NextRequest } from "next/server";
-import jwt, { JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
+import { prisma } from "@/lib/prisma/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m"; // default 15 min
+if (!JWT_SECRET) throw new Error("JWT_SECRET missing in environment");
 
-export interface AuthPayload extends JwtPayload {
-  userId: number;
-  roles: string[];
-  email?: string;
-}
-
-// --- Verify token and optionally check roles ---
-export function authenticate(req: NextRequest, allowedRoles?: string[]): AuthPayload {
+/**
+ * Authenticates a request using Bearer token from Authorization header.
+ * Optionally restricts access to specific roles.
+ * Returns decoded payload with { userId, roles, exp, ... }.
+ */
+export function authenticate(
+  req: NextRequest,
+  allowedRoles?: string[]
+): { userId: number; roles: string[] } {
   const authHeader = req.headers.get("authorization");
+
   if (!authHeader?.startsWith("Bearer ")) {
-    throw { status: 401, message: "Unauthorized: Missing token" };
+    throw { status: 401, message: "Missing or invalid Authorization header" };
   }
 
   const token = authHeader.split(" ")[1];
-
-  let payload: AuthPayload;
   try {
-    payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
-  } catch (err) {
-    throw { status: 401, message: "Invalid or expired token" };
-  }
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      userId: number;
+      roles: string[];
+      exp: number;
+    };
 
-  // Role-based access control
-  if (allowedRoles && allowedRoles.length > 0) {
-    const hasRole = allowedRoles.some((role) => payload.roles.includes(role));
-    if (!hasRole) {
-      throw { status: 403, message: "Forbidden: Insufficient permissions" };
+    // Optional role restriction
+    if (allowedRoles?.length) {
+      const hasAccess = decoded.roles.some((r) => allowedRoles.includes(r));
+      if (!hasAccess) throw { status: 403, message: "Forbidden" };
     }
+
+    return decoded;
+  } catch (err: any) {
+    if (err.name === "TokenExpiredError") {
+      throw { status: 401, message: "Token expired" };
+    }
+    throw { status: 401, message: "Invalid token" };
   }
-
-  return payload; // contains userId, roles, email, etc.
 }
 
-// --- Optional helper to check school-level access ---
-export async function canAccessSchool(
-  userId: number,
-  schoolSessionId: number,
-  prisma: any
-): Promise<boolean> {
-  const membership = await prisma.userSchoolSession.findFirst({
-    where: { userId, schoolSessionId, active: true },
+/**
+ * (Optional) Utility: Refresh user roles from DB if needed
+ * Can be called post-authentication to ensure fresh access control
+ */
+export async function getUserRoles(userId: number): Promise<string[]> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { roles: true },
   });
-  return !!membership;
-}
-
-export async function apiRefreshToken(): Promise<{ accessToken: string }> {
-  const res = await fetch("/api/auth/refresh", {
-    method: "POST",
-    credentials: "include", // sends cookies
-  });
-
-  if (!res.ok) throw new Error("Failed to refresh token");
-  return res.json();
-}
-
-
-
-// --- Generate access token helper (for refresh flow) ---
-export function generateAccessToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return user?.roles ?? [];
 }

@@ -1,85 +1,160 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma/prisma";
-import jwt from "jsonwebtoken";
+import { authenticate } from "@/lib/auth";
+import { redis, addCacheTag, invalidateByTags } from "@/lib/redis";
+import { rateLimiter } from "@/lib/rateLimiter";
+import { z } from "zod";
+import { handleError } from "@/lib/utils/handleError";
+import {
+  getClassrooms,
+  createClassroom,
+  updateClassroom,
+  deleteClassroom,
+} from "@/services/classroom";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+// --------------------
+// 🔹 Zod Schemas
+// --------------------
+const postSchema = z.object({
+  name: z.string().min(1),
+  grade: z.string().optional(),
+  schoolSessionId: z.number(),
+});
 
-// --- JWT helper ---
-async function verifyToken(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) throw { status: 401, message: "Unauthorized" };
-  const token = authHeader.split(" ")[1];
-  try { return jwt.verify(token, JWT_SECRET) as any; }
-  catch { throw { status: 401, message: "Invalid token" }; }
-}
+const putSchema = z.object({
+  id: z.number(),
+  name: z.string().optional(),
+  grade: z.string().optional(),
+});
 
-// --- GET /api/classrooms ---
+const deleteSchema = z.object({
+  id: z.number(),
+  schoolSessionId: z.number(),
+});
+
+// --------------------
+// 🔹 GET /api/classroom
+// --------------------
 export async function GET(req: NextRequest) {
   try {
-    const { roles, userId } = await verifyToken(req);
+    const payload = authenticate(req);
     const url = new URL(req.url);
     const page = parseInt(url.searchParams.get("page") || "1");
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
-    const schoolFilter = url.searchParams.get("schoolId");
+    const schoolId = url.searchParams.get("schoolId");
 
-    let allowedSchoolIds: number[] | undefined;
-    if (!roles.includes("SUPERADMIN")) {
+    // Non-superadmins: limit to their allowed school sessions
+    let allowedSchoolIds: number[] | "all" = "all";
+    if (!payload.roles.includes("SUPERADMIN")) {
       const memberships = await prisma.userSchoolSession.findMany({
-        where: { userId, active: true },
+        where: { userId: payload.userId, active: true },
         select: { schoolSessionId: true },
       });
-      allowedSchoolIds = memberships.map(m => m.schoolSessionId);
-      if (!allowedSchoolIds.length) return NextResponse.json({ data: [], meta: { page, pageSize } });
+      allowedSchoolIds = memberships.map((m) => m.schoolSessionId);
+      if (!allowedSchoolIds.length)
+        return NextResponse.json({ data: [], meta: { page, pageSize } });
     }
 
-    const whereClause: any = { deletedAt: null };
-    if (schoolFilter) {
-      const schoolIdNum = parseInt(schoolFilter);
-      if (!isNaN(schoolIdNum)) whereClause.schoolSessionId = schoolIdNum;
-    } else if (allowedSchoolIds) {
-      whereClause.schoolSessionId = { in: allowedSchoolIds };
-    }
+    // Cache key
+    const cacheKey = `classroom:school:${
+      schoolId ?? (allowedSchoolIds === "all" ? "all" : allowedSchoolIds.sort().join(","))
+    }:page:${page}:size:${pageSize}`;
 
-    const classrooms = await prisma.classroom.findMany({
-      where: whereClause,
-      include: { students: true, schoolSession: true },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { name: "asc" },
+    // 1️⃣ Serve cached if available
+    const cached = await redis.get(cacheKey);
+    if (cached) return NextResponse.json(JSON.parse(cached));
+
+    // 2️⃣ Rate limit only DB hits
+    const limit = await rateLimiter.limit(payload.userId);
+    if (!limit.success) throw new Error("RateLimit");
+
+    // 3️⃣ Query classrooms
+    const result = await getClassrooms({
+      schoolId: schoolId ? parseInt(schoolId) : undefined,
+      allowedSchoolIds,
+      page,
+      pageSize,
     });
 
-    return NextResponse.json({ data: classrooms, meta: { page, pageSize } });
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    // 4️⃣ Cache + tag for invalidation
+    await redis.set(cacheKey, JSON.stringify(result), { ex: 60 * 5 });
+    await addCacheTag(allowedSchoolIds, cacheKey, "classroom");
+
+    return NextResponse.json(result);
+  } catch (err) {
+    return handleError(err);
   }
 }
 
-// --- POST /api/classrooms ---
+// --------------------
+// 🔹 POST /api/classroom
+// --------------------
 export async function POST(req: NextRequest) {
   try {
-    const { roles, userId } = await verifyToken(req);
-    if (!roles.includes("SUPERADMIN") && !roles.includes("ADMIN")) throw { status: 403, message: "Forbidden" };
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const body = postSchema.parse(await req.json());
 
-    const body = await req.json();
-    const { name, grade, schoolSessionId } = body;
-    if (!name || !schoolSessionId) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const limit = await rateLimiter.limit(payload.userId);
+    if (!limit.success) throw new Error("RateLimit");
 
-    if (!roles.includes("SUPERADMIN")) {
+    // Non-superadmins: check membership in school
+    if (!payload.roles.includes("SUPERADMIN")) {
       const membership = await prisma.userSchoolSession.findFirst({
-        where: { userId, schoolSessionId, active: true },
+        where: { userId: payload.userId, schoolSessionId: body.schoolSessionId, active: true },
       });
-      if (!membership) return NextResponse.json({ error: "Forbidden: Cannot create classroom in this school" }, { status: 403 });
+      if (!membership) throw new Error("Forbidden");
     }
 
-    const classroom = await prisma.classroom.create({
-      data: { name, grade, schoolSessionId },
-      include: { students: true, schoolSession: true },
-    });
+    const classroom = await createClassroom(body);
 
-    return NextResponse.json({ data: classroom }, { status: 201 });
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    // Invalidate cache for that school
+    await invalidateByTags("classroom", [body.schoolSessionId]);
+
+    return NextResponse.json({ data: classroom, message: "Classroom created successfully" }, { status: 201 });
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+// --------------------
+// 🔹 PUT /api/classroom
+// --------------------
+export async function PUT(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const body = putSchema.parse(await req.json());
+
+    const limit = await rateLimiter.limit(payload.userId);
+    if (!limit.success) throw new Error("RateLimit");
+
+    const updated = await updateClassroom(body, payload);
+
+    // Invalidate cache by school
+    await invalidateByTags("classroom", [updated.schoolSessionId]);
+
+    return NextResponse.json({ data: updated, message: "Classroom updated successfully" });
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+// --------------------
+// 🔹 DELETE /api/classroom
+// --------------------
+export async function DELETE(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+    const body = deleteSchema.parse(await req.json());
+
+    const limit = await rateLimiter.limit(payload.userId);
+    if (!limit.success) throw new Error("RateLimit");
+
+    await deleteClassroom(body.id, body.schoolSessionId, payload);
+
+    await invalidateByTags("classroom", [body.schoolSessionId]);
+
+    return NextResponse.json({ data: null, message: "Classroom deleted successfully" });
+  } catch (err) {
+    return handleError(err);
   }
 }

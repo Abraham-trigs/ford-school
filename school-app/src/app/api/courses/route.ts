@@ -1,72 +1,161 @@
+// /app/api/courses/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma/prisma";
-import jwt from "jsonwebtoken";
+import { redis, addCacheTag } from "@/lib/redis";
+import { authenticate } from "@/lib/auth";
+import { rateLimiter } from "@/lib/ratelimit";
+import { handleError } from "@/lib/utils/handleError";
+import { getCourses, createCourse, updateCourse, deleteCourse } from "@/services/course";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+// Zod schemas
+const getQuerySchema = z.object({
+  schoolSessionId: z
+    .string()
+    .regex(/^\d+$/)
+    .transform((s) => parseInt(s))
+    .optional(),
+  page: z.string().regex(/^\d+$/).transform(Number).optional(),
+  pageSize: z.string().regex(/^\d+$/).transform(Number).optional(),
+});
 
-// --- JWT helper ---
-async function verifyToken(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) throw { status: 401, message: "Unauthorized" };
-  const token = authHeader.split(" ")[1];
-  try { return jwt.verify(token, JWT_SECRET) as any; }
-  catch { throw { status: 401, message: "Invalid token" }; }
-}
+const postSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  teacherId: z.number().optional(),
+  schoolSessionId: z.number(),
+});
 
-// --- GET /api/courses ---
+const putSchema = z.object({
+  id: z.number(),
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  teacherId: z.number().optional(),
+});
+
+const deleteSchema = z.object({
+  id: z.number(),
+});
+
+// GET /api/courses
 export async function GET(req: NextRequest) {
   try {
-    const { roles, userId } = await verifyToken(req);
+    // Require ADMIN or SUPERADMIN to list courses
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
     const url = new URL(req.url);
-    const schoolSessionId = url.searchParams.get("schoolSessionId");
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
+    const query = getQuerySchema.parse(Object.fromEntries(url.searchParams.entries()));
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const schoolSessionId = query.schoolSessionId; // optional number
 
-    const whereClause: any = { deletedAt: null };
-    if (schoolSessionId) whereClause.schoolSessionId = parseInt(schoolSessionId);
-
-    if (!roles.includes("SUPERADMIN")) {
+    // allowedSchoolIds only when needed (non-superadmin & no explicit schoolSessionId)
+    let allowedSchoolIds: number[] | "all" = "all";
+    if (!payload.roles.includes("SUPERADMIN") && schoolSessionId === undefined) {
       const memberships = await prisma.userSchoolSession.findMany({
-        where: { userId, active: true },
+        where: { userId: payload.userId, active: true },
         select: { schoolSessionId: true },
       });
-      const allowedSchoolIds = memberships.map(m => m.schoolSessionId);
-      whereClause.schoolSessionId = { in: allowedSchoolIds };
+      allowedSchoolIds = memberships.map((m) => m.schoolSessionId).sort((a, b) => a - b);
+      if (allowedSchoolIds.length === 0) {
+        return NextResponse.json({ data: [], meta: { page, pageSize, total: 0 } });
+      }
     }
 
-    const courses = await prisma.course.findMany({
-      where: whereClause,
-      include: { students: true, teacher: true, assignments: true, schoolSession: true },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { createdAt: "desc" },
+    // Compose stable cache key
+    const schoolKeyPart =
+      schoolSessionId !== undefined
+        ? String(schoolSessionId)
+        : allowedSchoolIds === "all"
+        ? "all"
+        : allowedSchoolIds.join(",");
+    const cacheKey = `course:school:${schoolKeyPart}:page:${page}:size:${pageSize}`;
+
+    // Return cached if present
+    const cached = await redis.get(cacheKey);
+    if (cached) return NextResponse.json(JSON.parse(cached));
+
+    // Rate limit DB-hitting request
+    const limit = await rateLimiter.limit(String(payload.userId));
+    if (!limit.success) throw new Error("RateLimit");
+
+    // Fetch data
+    const res = await getCourses({
+      schoolSessionId,
+      allowedSchoolIds,
+      page,
+      pageSize,
     });
 
-    return NextResponse.json({ data: courses, meta: { page, pageSize } });
+    // Cache result & tag for invalidation
+    await redis.set(cacheKey, JSON.stringify(res), { ex: 60 * 5 });
+    // Tag by school(s); if a specific schoolSessionId was requested, tag that
+    if (schoolSessionId !== undefined) {
+      await addCacheTag([schoolSessionId], cacheKey, "course");
+    } else if (Array.isArray(allowedSchoolIds)) {
+      await addCacheTag(allowedSchoolIds, cacheKey, "course");
+    } else {
+      // global tag for superadmin views
+      await addCacheTag("all", cacheKey, "course");
+    }
+
+    return NextResponse.json(res);
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    return handleError(err);
   }
 }
 
-// --- POST /api/courses ---
+// POST /api/courses
 export async function POST(req: NextRequest) {
   try {
-    const { roles } = await verifyToken(req);
-    if (!["SUPERADMIN", "ADMIN"].some(r => roles.includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
 
-    const body = await req.json();
-    const { name, description, teacherId, schoolSessionId } = body;
-    if (!name || !schoolSessionId) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    // Rate limit
+    const limit = await rateLimiter.limit(String(payload.userId));
+    if (!limit.success) throw new Error("RateLimit");
 
-    const course = await prisma.course.create({
-      data: { name, description, teacherId, schoolSessionId },
-      include: { students: true, teacher: true, assignments: true, schoolSession: true },
-    });
+    const body = postSchema.parse(await req.json());
 
-    return NextResponse.json({ data: course }, { status: 201 });
+    // createCourse contains service-level authorization and invalidation
+    const course = await createCourse(body, payload);
+
+    return NextResponse.json({ data: course, message: "Course created successfully" }, { status: 201 });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    return handleError(err);
+  }
+}
+
+// PUT /api/courses
+export async function PUT(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+
+    const limit = await rateLimiter.limit(String(payload.userId));
+    if (!limit.success) throw new Error("RateLimit");
+
+    const body = putSchema.parse(await req.json());
+
+    const updated = await updateCourse(body, payload);
+
+    return NextResponse.json({ data: updated, message: "Course updated successfully" });
+  } catch (err: any) {
+    return handleError(err);
+  }
+}
+
+// DELETE /api/courses
+export async function DELETE(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN"]);
+
+    const limit = await rateLimiter.limit(String(payload.userId));
+    if (!limit.success) throw new Error("RateLimit");
+
+    const body = deleteSchema.parse(await req.json());
+
+    const deleted = await deleteCourse(body.id, payload);
+
+    return NextResponse.json({ data: deleted, message: "Course deleted successfully" });
+  } catch (err: any) {
+    return handleError(err);
   }
 }

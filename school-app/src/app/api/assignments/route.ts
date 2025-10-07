@@ -1,103 +1,169 @@
+// app/api/assignments/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma/prisma";
-import jwt from "jsonwebtoken";
-import { RoleType } from "@prisma/client";
+import { z } from "zod";
+import { authenticate } from "@/lib/auth";
+import { rateLimiter } from "@/lib/ratelimit";
+import { handleError } from "@/lib/utils/handleError";
+import { redis } from "@/lib/redis";
+import { revalidateTag } from "next/cache";
+import * as svc from "@/services/assignment";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const assignmentIncludes = { course: true, grades: { include: { student: true } } };
+//
+// Zod schemas + types
+//
+const getQuerySchema = z.object({
+  courseId: z.coerce.number().optional(),
+  type: z.enum(["HOMEWORK", "QUIZ", "EXAM"]).optional(),
+  dueDateFrom: z.string().optional(),
+  dueDateTo: z.string().optional(),
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).default(20),
+}).strict();
 
-// --- JWT helper ---
-async function verifyToken(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) throw { status: 401, message: "Unauthorized" };
-  const token = authHeader.split(" ")[1];
-  try { return jwt.verify(token, JWT_SECRET) as any; }
-  catch { throw { status: 401, message: "Invalid token" }; }
+const createSchema = z.object({
+  courseId: z.coerce.number(),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  type: z.enum(["HOMEWORK", "QUIZ", "EXAM"]).optional(),
+  dueDate: z.string().optional(),
+  metadata: z.any().optional(),
+}).strict();
+
+const updateSchema = createSchema.extend({
+  id: z.coerce.number(),
+}).strict();
+
+const deleteSchema = z.object({ id: z.coerce.number() }).strict();
+
+//
+// deterministic stable key - must match service's stableKey logic
+//
+function stableKey(filters: Record<string, any>, page: number, pageSize: number) {
+  const entries = Object.entries(filters)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => [k, String(v)]);
+  entries.sort(([a], [b]) => a.localeCompare(b));
+  const qs = entries.map(([k, v]) => `${k}=${v}`).join("&") || "all";
+  return `assignments:${qs}:page=${page}:size=${pageSize}`;
 }
 
-// --- Role access ---
-async function canManageAssignment(userId: number, RoleType: string[], courseId: number) {
-  if (RoleType.includes("SUPERADMIN")) return true;
-  if (RoleType.includes("ADMIN")) {
-    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { schoolSessionId: true } });
-    if (!course) return false;
-    const membership = await prisma.userSchoolSession.findFirst({ where: { userId, schoolSessionId: course.schoolSessionId, active: true } });
-    return !!membership;
-  }
-  if (RoleType.includes("TEACHER")) {
-    const course = await prisma.course.findUnique({ where: { id: courseId } });
-    return course?.teacherId === userId;
-  }
-  return false;
-}
-
-// --- GET /api/assignments ---
+//
+// GET - cached, cache-bypass before rate-limit
+//
 export async function GET(req: NextRequest) {
   try {
-    const { RoleType, userId } = await verifyToken(req);
-    const url = new URL(req.url);
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN", "TEACHER"]);
+    const params = Object.fromEntries(new URL(req.url).searchParams.entries());
+    const q = getQuerySchema.parse(params);
 
-    const courseId = url.searchParams.get("courseId") ? parseInt(url.searchParams.get("courseId")!) : undefined;
-    const courseName = url.searchParams.get("courseName") || undefined;
-    const dueDateFrom = url.searchParams.get("dueDateFrom") ? new Date(url.searchParams.get("dueDateFrom")!) : undefined;
-    const dueDateTo = url.searchParams.get("dueDateTo") ? new Date(url.searchParams.get("dueDateTo")!) : undefined;
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
+    const filters = {
+      courseId: q.courseId,
+      type: q.type,
+      dueDateFrom: q.dueDateFrom,
+      dueDateTo: q.dueDateTo,
+    };
+    const key = stableKey(filters, q.page, q.pageSize);
 
-    const whereClause: any = { deletedAt: null };
-    if (courseId) whereClause.courseId = courseId;
-    if (dueDateFrom || dueDateTo) whereClause.dueDate = {};
-    if (dueDateFrom) whereClause.dueDate.gte = dueDateFrom;
-    if (dueDateTo) whereClause.dueDate.lte = dueDateTo;
-
-    if (!RoleType.includes("SUPERADMIN")) {
-      const memberships = await prisma.userSchoolSession.findMany({ where: { userId, active: true }, select: { schoolSessionId: true } });
-      const allowedSchoolIds = memberships.map(m => m.schoolSessionId);
-      if (RoleType.includes("ADMIN")) whereClause.course = { schoolSessionId: { in: allowedSchoolIds } };
-      else if (RoleType.includes("TEACHER")) whereClause.course = { teacherId: userId };
+    // if cached, return immediately and DO NOT rate-limit
+    try {
+      const cached = await redis.get(key);
+      if (cached) {
+        return NextResponse.json(JSON.parse(cached));
+      }
+    } catch (e) {
+      // do not fail on cache reads
+      console.warn("redis.get failed", e);
     }
 
-    if (courseName) whereClause.course = { ...whereClause.course, name: { contains: courseName, mode: "insensitive" } };
+    // not cached => rate-limit per-user then hit DB
+    const rl = await rateLimiter.limit(String(payload.userId));
+    if (!rl.success) throw { status: 429, message: "Too many requests" };
 
-    const total = await prisma.assignment.count({ where: whereClause });
-
-    const assignments = await prisma.assignment.findMany({
-      where: whereClause,
-      include: assignmentIncludes,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { createdAt: "desc" },
+    const result = await svc.getAssignments({
+      filters,
+      page: q.page,
+      pageSize: q.pageSize,
+      requester: { userId: payload.userId, roles: payload.roles },
+      cacheKey: key, // let service store cache & tag it
     });
 
-    return NextResponse.json({
-      data: assignments,
-      meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    });
+    return NextResponse.json(result);
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    return handleError(err);
   }
 }
 
-// --- POST /api/assignments ---
+//
+// POST - create (authorizes inside service, invalidates tags + revalidateTag)
+//
 export async function POST(req: NextRequest) {
   try {
-    const { RoleType, userId } = await verifyToken(req);
-    if (!["SUPERADMIN", "ADMIN", "TEACHER"].some(r => RoleType.includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN", "TEACHER"]);
+    const rl = await rateLimiter.limit(String(payload.userId));
+    if (!rl.success) throw { status: 429, message: "Too many requests" };
 
-    const { title, description, dueDate, courseId } = await req.json();
-    if (!title || !courseId) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const body = createSchema.parse(await req.json());
 
-    if (!(await canManageAssignment(userId, RoleType, courseId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    const assignment = await prisma.assignment.create({
-      data: { title, description, dueDate: dueDate ? new Date(dueDate) : undefined, courseId },
-      include: assignmentIncludes,
+    const created = await svc.createAssignment({
+      data: body,
+      requester: { userId: payload.userId, roles: payload.roles },
     });
 
-    return NextResponse.json({ data: assignment }, { status: 201 });
+    // revalidate Next.js tags for immediate consistency (optional + safe)
+    revalidateTag("assignments");
+    revalidateTag(`assignments:course:${created.courseId}`);
+
+    return NextResponse.json({ data: created }, { status: 201 });
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: err.status || 500 });
+    return handleError(err);
+  }
+}
+
+//
+// PUT - update (service enforces deletedAt check + RBAC)
+//
+export async function PUT(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN", "TEACHER"]);
+    const rl = await rateLimiter.limit(String(payload.userId));
+    if (!rl.success) throw { status: 429, message: "Too many requests" };
+
+    const body = updateSchema.parse(await req.json());
+
+    const updated = await svc.updateAssignment({
+      data: body,
+      requester: { userId: payload.userId, roles: payload.roles },
+    });
+
+    revalidateTag("assignments");
+    revalidateTag(`assignments:course:${updated.courseId}`);
+
+    return NextResponse.json({ data: updated });
+  } catch (err: any) {
+    return handleError(err);
+  }
+}
+
+//
+// DELETE - soft delete (body { id })
+//
+export async function DELETE(req: NextRequest) {
+  try {
+    const payload = authenticate(req, ["SUPERADMIN", "ADMIN", "TEACHER"]);
+    const rl = await rateLimiter.limit(String(payload.userId));
+    if (!rl.success) throw { status: 429, message: "Too many requests" };
+
+    const body = deleteSchema.parse(await req.json());
+    const deleted = await svc.deleteAssignment({
+      id: body.id,
+      requester: { userId: payload.userId, roles: payload.roles },
+    });
+
+    revalidateTag("assignments");
+    revalidateTag(`assignments:course:${deleted.courseId}`);
+
+    return NextResponse.json({ data: deleted });
+  } catch (err: any) {
+    return handleError(err);
   }
 }
