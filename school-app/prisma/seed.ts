@@ -4,8 +4,7 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Helper function to hash passwords
-async function hashPassword(password: string): Promise<string> {
+async function hashPassword(password: string) {
   const salt = await bcrypt.genSalt(10);
   return bcrypt.hash(password, salt);
 }
@@ -14,18 +13,19 @@ async function main() {
   console.log('Start seeding...');
 
   // --- Clear existing data ---
-  await prisma.superAdminSession.deleteMany();
+  await prisma.userSchoolSession.deleteMany();
   await prisma.userSession.deleteMany();
+  await prisma.superAdminSession.deleteMany();
   await prisma.superAdminProfile.deleteMany();
   await prisma.superAdmin.deleteMany();
-  await prisma.userSchoolSession.deleteMany();
   await prisma.user.deleteMany();
   await prisma.schoolSession.deleteMany();
+  await prisma.classroom.deleteMany();
   await prisma.studentProfile.deleteMany();
   await prisma.teacherProfile.deleteMany();
   console.log('Existing data cleared.');
 
-  // --- Create the master SuperAdmin ---
+  // --- Create master SuperAdmin user ---
   const superAdminPassword = await hashPassword('SuperAdmin@123');
   const superAdminUser = await prisma.user.create({
     data: {
@@ -33,26 +33,42 @@ async function main() {
       fullName: 'Master SuperAdmin',
       humanId: 'SYS-SA-001',
       role: RoleType.SUPERADMIN,
-      superAdminMeta: { create: { sessions: { create: [] } } },
-      superAdminProfile: { create: { name: 'Master SuperAdmin', title: 'Founder', bio: 'The top system administrator.' } },
     },
   });
-  console.log(`Created Super Admin user with ID: ${superAdminUser.id}`);
+  console.log('SuperAdmin created:', superAdminUser.id);
 
-  // --- Create a school session ---
+  // --- Create SuperAdmin extension ---
+  await prisma.superAdmin.create({
+    data: {
+      userId: superAdminUser.id,
+      metadata: { note: 'Top-level admin' },
+    },
+  });
+
+  // --- Create SuperAdmin Profile ---
+  await prisma.superAdminProfile.create({
+    data: {
+      userId: superAdminUser.id,
+      name: 'Master SuperAdmin',
+      title: 'Founder',
+      bio: 'The top system administrator.',
+    },
+  });
+
+  // --- Create School Session ---
   const schoolSession = await prisma.schoolSession.create({
     data: {
-      superAdminId: superAdminUser.id,
       name: 'Bright Horizons Academy',
       slug: 'bha-2025',
-      startDate: new Date('2025-09-01T00:00:00Z'),
-      endDate: new Date('2026-06-30T00:00:00Z'),
+      startDate: new Date('2025-09-01'),
+      endDate: new Date('2026-06-30'),
       metadata: { setupComplete: true },
+      superAdmin: { connect: { userId: superAdminUser.id } },
     },
   });
-  console.log(`Created School Session with ID: ${schoolSession.id}`);
+  console.log('SchoolSession created:', schoolSession.id);
 
-  // --- Create a School Admin ---
+  // --- Create School Admin ---
   const schoolAdminPassword = await hashPassword('Admin@123');
   const schoolAdminUser = await prisma.user.create({
     data: {
@@ -60,62 +76,67 @@ async function main() {
       fullName: 'Alice Johnson',
       humanId: 'BHA-ADM-001',
       role: RoleType.ADMIN,
-      schoolMemberships: {
-        create: {
-          schoolSessionId: schoolSession.id,
-          email: 'admin@bha.edu',
-          password: schoolAdminPassword,
-          role: RoleType.ADMIN,
-          humanId: 'BHA-ADM-001',
-        },
-      },
     },
   });
-  console.log(`Created School Admin user with ID: ${schoolAdminUser.id}`);
 
-  // --- Create a Teacher ---
-  const teacherPassword = await hashPassword('Teacher@123'); // ✅ define before use
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: 'BHA-ADM-001',
+      userId: schoolAdminUser.id,
+      schoolSessionId: schoolSession.id,
+      email: schoolAdminUser.email,
+      password: schoolAdminPassword,
+      role: RoleType.ADMIN,
+    },
+  });
+  console.log('School Admin created:', schoolAdminUser.id);
+
+  // --- Create Teacher ---
+  const teacherPassword = await hashPassword('Teacher@123');
   const teacherUser = await prisma.user.create({
     data: {
       email: 'teacher@bha.edu',
       fullName: 'Mr. David Smith',
       humanId: 'BHA-TCH-005',
       role: RoleType.TEACHER,
-      teacherProfile: {
-        create: {
-          name: 'Mr. David Smith',
-          bio: 'Teaches Grade 5 English.',
-          title: 'Senior Teacher',
-          employeeId: 'BHA-TCH-005', // required
-          hireDate: new Date('2023-08-01T00:00:00Z'), // required
-        },
-      },
-      schoolMemberships: {
-        create: {
-          schoolSessionId: schoolSession.id,
-          email: 'teacher@bha.edu',
-          password: teacherPassword,
-          role: RoleType.TEACHER,
-          humanId: 'BHA-TCH-005',
-        },
-      },
     },
   });
-  console.log(`Created Teacher user with ID: ${teacherUser.id}`);
 
-  // --- Create a Classroom and add the Teacher ---
-const classroom = await prisma.classroom.create({
-  data: {
-    name: 'Grade 5A',
-    gradeLevel: GradeLevel.GRADE_5,
-    schoolSession: { connect: { id: schoolSession.id } },
-    teacher: { connect: { id: teacherUser.id } },
-  },
-});
-  
-  console.log(`Created Classroom with ID: ${classroom.id}`);
+  await prisma.teacherProfile.create({
+    data: {
+      userId: teacherUser.id,
+      name: 'Mr. David Smith',
+      title: 'Senior Teacher',
+      bio: 'Teaches Grade 5 English.',
+      employeeId: 'BHA-TCH-005',
+      hireDate: new Date('2023-08-01'),
+    },
+  });
 
-  // --- Create a Student ---
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: 'BHA-TCH-005',
+      userId: teacherUser.id,
+      schoolSessionId: schoolSession.id,
+      email: teacherUser.email,
+      password: teacherPassword,
+      role: RoleType.TEACHER,
+    },
+  });
+  console.log('Teacher created:', teacherUser.id);
+
+  // --- Create Classroom ---
+  const classroom = await prisma.classroom.create({
+    data: {
+      name: 'Grade 5A',
+      gradeLevel: GradeLevel.GRADE_5,
+      schoolSessionId: schoolSession.id,
+      teacherId: teacherUser.id,
+    },
+  });
+  console.log('Classroom created:', classroom.id);
+
+  // --- Create Student ---
   const studentPassword = await hashPassword('Student@123');
   const studentUser = await prisma.user.create({
     data: {
@@ -123,26 +144,30 @@ const classroom = await prisma.classroom.create({
       fullName: 'Emily Davis',
       humanId: 'BHA-STU-010',
       role: RoleType.STUDENT,
-      studentProfile: {
-        create: {
-          name: 'Emily Davis',
-          admissionNumber: 'ADM-010',
-          currentGrade: GradeLevel.GRADE_5,
-          classroom: { connect: { id: classroom.id } },
-        },
-      },
-      schoolMemberships: {
-        create: {
-          schoolSession: { connect: { id: schoolSession.id } },
-          email: 'student@bha.edu',
-          password: studentPassword,
-          role: RoleType.STUDENT,
-          humanId: 'BHA-STU-010',
-        },
-      },
     },
   });
-  console.log(`Created Student user with ID: ${studentUser.id}`);
+
+  await prisma.studentProfile.create({
+    data: {
+      userId: studentUser.id,
+      name: 'Emily Davis',
+      admissionNumber: 'ADM-010',
+      currentGrade: GradeLevel.GRADE_5,
+      classroomId: classroom.id,
+    },
+  });
+
+  await prisma.userSchoolSession.create({
+    data: {
+      humanId: 'BHA-STU-010',
+      userId: studentUser.id,
+      schoolSessionId: schoolSession.id,
+      email: studentUser.email,
+      password: studentPassword,
+      role: RoleType.STUDENT,
+    },
+  });
+  console.log('Student created:', studentUser.id);
 
   console.log('Seeding complete.');
 }
