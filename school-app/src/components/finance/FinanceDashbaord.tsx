@@ -15,8 +15,8 @@ import FinanceTrendChart from "./FinanceTrendChart";
 import FinanceSummary from "./FinanceSummary";
 import FinanceAnalytics from "./FinanceAnalytics";
 import FinanceFilterBar from "./FinanceFilterBar";
-import FinanceInsights from "@/features/finance/components/FinanceInsights";
-import FinanceInsightBox from "@/features/finance/components/FinanceInsightBox";
+import FinanceInsights from "@/components/Finance/FinanceInsights";
+import FinanceInsightBox from "@/components/Finance/FinanceInsightBox";
 
 interface User {
   id: string;
