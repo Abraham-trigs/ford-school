@@ -10,15 +10,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        deepest: "#121212",       
-        deepest0: "#1E1E1E",    
-        accentPurple: "#BB86FC",  
-        greener: "#03DAC6",    
-        lightGray: "#cecece",     
-        error: "#CF6679",         
-        purple: "#7E48CC",   
-        purple0: '#ae00ff',
-        deeper: "#2a004b"
+        background: "#121212",        // previously deepest
+        surface: "#1E1E1E",           // previously deepest0
+        primary: "#BB86FC",            // previously accentPurple
+        secondary: "#03DAC6",          // previously greener
+        muted: "#cecece",              // previously lightGray
+        danger: "#CF6679",             // previously error
+        purple: "#7E48CC",             // same, can use semantic if needed
+        purpleBright: "#ae00ff",       // previously purple0
+        deepPurple: "#2a004b",         // previously deeper
       },
       fontFamily: {
         sans: ["var(--font-lexend)", "ui-sans-serif", "system-ui"],

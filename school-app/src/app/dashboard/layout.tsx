@@ -1,24 +1,18 @@
-// /app/layout.tsx
-"use client";
+import Sidebar from "@/components/dashboard/Sidebar";
+import Topbar from "@/components/dashboard/Topbar";
 
-import { ReactNode, useEffect } from "react";
-import { useAuthStore } from "@/store/authStore";
-import { setupApiClient } from "@/lib/apiClient";
-import RouteGuard from "@/components/RoutGuard";
-
-interface RootLayoutProps {
-  children: ReactNode;
-}
-
-export default function RootLayout({ children }: RootLayoutProps) {
-  const { refreshUser, setAccessToken, logout, accessToken } = useAuthStore();
-
-  const getAccessToken = () => accessToken;
-
-  useEffect(() => {
-    setupApiClient(getAccessToken, setAccessToken, logout);
-    refreshUser();
-  }, []);
-
-  return <RouteGuard>{children}</RouteGuard>;
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <Topbar />
+        <main className="p-6 flex-1">{children}</main>
+      </div>
+    </div>
+  );
 }
