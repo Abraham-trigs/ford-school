@@ -8,81 +8,117 @@ import "react-toastify/dist/ReactToastify.css";
 import DataTable from "@/components/common/Datable";
 import InspectorModal from "@/components/Inspector/InspectorModal";
 import DeleteModal from "@/components/common/DeleteModal";
-import LoaderModal from "@/components/layout/LoaderModal";
-
-export interface Inspector {
-  id?: string;
-  name: string;
-  assignedArea: string;
-}
+import LoaderModal from "@/components/common/LoaderModal";
+import { Inspector } from "@/types/Inspector";
 
 export default function InspectorPage() {
-  const [records, setRecords] = useState<Inspector[]>([]);
+  const [inspectors, setInspectors] = useState<Inspector[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [recordToEdit, setRecordToEdit] = useState<Inspector | undefined>();
+  const [inspectorToEdit, setInspectorToEdit] = useState<
+    Inspector | undefined
+  >();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<Inspector | null>(null);
+  const [inspectorToDelete, setInspectorToDelete] = useState<Inspector | null>(
+    null
+  );
   const [user, setUser] = useState<{ role: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    axios.get("/api/auth/me").then((res) => setUser(res.data.user));
-    axios.get("/api/inspectors").then((res) => setRecords(res.data));
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auth/me");
+        setUser(res.data.user);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchInspectors = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/inspectors");
+        setInspectors(res.data);
+      } catch (err: any) {
+        toast.error(
+          err.response?.data?.message || "Failed to fetch inspectors"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+    fetchInspectors();
   }, []);
 
-  const handleCreate = () => setModalOpen(true);
-  const handleEdit = (record: Inspector) => {
-    setRecordToEdit(record);
+  const handleCreate = () => {
+    setInspectorToEdit(undefined);
     setModalOpen(true);
   };
-  const handleSuccess = (record: Inspector) => {
-    setRecords((prev) => {
-      const index = prev.findIndex((r) => r.id === record.id);
-      if (index > -1) {
-        prev[index] = record;
-        return [...prev];
-      }
-      return [record, ...prev];
-    });
-    toast.success("Saved successfully!");
+
+  const handleEdit = (inspector: Inspector) => {
+    setInspectorToEdit(inspector);
+    setModalOpen(true);
   };
 
-  const handleDeleteClick = (record: Inspector) => {
-    setRecordToDelete(record);
+  const handleSuccess = (inspector: Inspector) => {
+    setInspectors((prev) => {
+      const index = prev.findIndex((i) => i.id === inspector.id);
+      if (index > -1) {
+        prev[index] = inspector;
+        return [...prev];
+      }
+      return [inspector, ...prev];
+    });
+    toast.success(`${inspector.name} saved successfully!`);
+  };
+
+  const handleDeleteClick = (inspector: Inspector) => {
+    setInspectorToDelete(inspector);
     setDeleteModalOpen(true);
   };
+
   const handleConfirmDelete = async () => {
-    if (!recordToDelete) return;
+    if (!inspectorToDelete) return;
     setLoading(true);
     try {
-      await axios.delete(`/api/inspectors?id=${recordToDelete.id}`);
-      setRecords((prev) => prev.filter((r) => r.id !== recordToDelete.id));
-      toast.success("Deleted successfully!");
+      await axios.delete(`/api/inspectors?id=${inspectorToDelete.id}`);
+      setInspectors((prev) =>
+        prev.filter((i) => i.id !== inspectorToDelete.id)
+      );
+      toast.success(`${inspectorToDelete.name} deleted successfully!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete inspector");
     } finally {
-      setRecordToDelete(null);
+      setInspectorToDelete(null);
       setLoading(false);
     }
   };
 
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
+
   const columns = [
     { header: "Name", accessor: "name" },
-    { header: "Assigned Area", accessor: "assignedArea" },
+    { header: "Department", accessor: "department" },
+    { header: "Level", accessor: "level" },
     {
       header: "Actions",
       accessor: "actions",
-      render: (record: Inspector) => (
+      render: (inspector: Inspector) => (
         <div className="flex space-x-2">
           <button
-            onClick={() => handleEdit(record)}
+            onClick={() => handleEdit(inspector)}
             className="px-3 py-1 bg-accentTeal text-background rounded"
           >
             Edit
           </button>
-          {["ADMIN", "INSPECTOR"].includes(user?.role || "") && (
+          {["ADMIN", "INSPECTOR"].includes(user.role) && (
             <button
-              onClick={() => handleDeleteClick(record)}
+              onClick={() => handleDeleteClick(inspector)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
             >
               Delete
@@ -92,8 +128,6 @@ export default function InspectorPage() {
       ),
     },
   ];
-
-  if (!user) return <LoaderModal isVisible text="Loading..." />;
 
   return (
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
@@ -110,19 +144,22 @@ export default function InspectorPage() {
         )}
       </div>
 
-      <DataTable columns={columns} data={records} />
+      <DataTable columns={columns} data={inspectors} />
+
       <InspectorModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
-        recordToEdit={recordToEdit}
+        inspectorToEdit={inspectorToEdit}
       />
+
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Delete "${recordToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${inspectorToDelete?.name}"?`}
       />
+
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );

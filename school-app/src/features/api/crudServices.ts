@@ -1,19 +1,21 @@
-// src/features/api/crudService.ts
-import { prisma } from "@/lib/prisma";
+// src/features/api/crudServices.ts
 import { NextRequest, NextResponse } from "next/server";
-import { z, ZodSchema } from "zod";
+import { ZodSchema } from "zod";
 
-// Generic multi-tenant CRUD handler
 export function createCRUDHandler<T extends object>({
   model,
   schema,
   allowedRoles,
   resourceName,
+  onBeforeCreate,
+  onAfterMutate,
 }: {
-  model: any; // Prisma model
+  model: any;
   schema: ZodSchema<T>;
   allowedRoles: string[];
   resourceName: string;
+  onBeforeCreate?: (data: T, user: any) => Promise<T> | T;
+  onAfterMutate?: (record: any, action: "create" | "update" | "delete") => Promise<void> | void;
 }) {
   return async function handler(req: NextRequest, user: { id: string; role: string; schoolId: string }) {
     if (!allowedRoles.includes(user.role)) {
@@ -29,8 +31,10 @@ export function createCRUDHandler<T extends object>({
 
         case "POST": {
           const body = await req.json();
-          const validated = schema.parse(body);
+          let validated = schema.parse(body);
+          if (onBeforeCreate) validated = await onBeforeCreate(validated, user);
           const created = await model.create({ data: { ...validated, schoolId: user.schoolId } });
+          if (onAfterMutate) await onAfterMutate(created, "create");
           return NextResponse.json(created);
         }
 
@@ -39,10 +43,8 @@ export function createCRUDHandler<T extends object>({
           const body = await req.json();
           const validated = schema.parse(body);
           if (!validated.id) throw new Error("Missing id");
-          const updated = await model.update({
-            where: { id: validated.id },
-            data: { ...validated },
-          });
+          const updated = await model.update({ where: { id: validated.id }, data: validated });
+          if (onAfterMutate) await onAfterMutate(updated, "update");
           return NextResponse.json(updated);
         }
 
@@ -50,7 +52,8 @@ export function createCRUDHandler<T extends object>({
           const { searchParams } = new URL(req.url);
           const id = searchParams.get("id");
           if (!id) throw new Error("Missing id");
-          await model.delete({ where: { id } });
+          const deleted = await model.delete({ where: { id } });
+          if (onAfterMutate) await onAfterMutate(deleted, "delete");
           return NextResponse.json({ message: `${resourceName} deleted` });
         }
 
@@ -58,7 +61,8 @@ export function createCRUDHandler<T extends object>({
           return NextResponse.json({ message: "Method not allowed" }, { status: 405 });
       }
     } catch (err: any) {
-      return NextResponse.json({ message: err.message || "Error" }, { status: 400 });
+      console.error(`[${resourceName} Error]:`, err);
+      return NextResponse.json({ message: err.message || "Internal Error" }, { status: 400 });
     }
   };
 }

@@ -1,22 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { FinanceRecord, FinanceType } from "@/types/finance";
+import { toast } from "react-toastify";
 
-type FinanceRecord = {
-  id?: string;
-  type: string;
-  amount: number;
-  date: string;
-  description: string;
-};
-
-type FinanceModalProps = {
+interface FinanceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (record: FinanceRecord) => void;
   recordToEdit?: FinanceRecord;
-};
+}
+
+const financeTypes: FinanceType[] = [
+  "INCOME",
+  "EXPENSE",
+  "SALARY",
+  "PURCHASE",
+  "OTHER",
+];
 
 export default function FinanceModal({
   isOpen,
@@ -24,122 +26,122 @@ export default function FinanceModal({
   onSuccess,
   recordToEdit,
 }: FinanceModalProps) {
-  const [type, setType] = useState("");
-  const [amount, setAmount] = useState<number>(0);
-  const [date, setDate] = useState("");
-  const [description, setDescription] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState<FinanceRecord>({
+    type: "INCOME",
+    amount: 0,
+    date: new Date().toISOString().split("T")[0],
+    description: "",
+  });
 
   useEffect(() => {
-    if (recordToEdit) {
-      setType(recordToEdit.type);
-      setAmount(recordToEdit.amount);
-      setDate(recordToEdit.date);
-      setDescription(recordToEdit.description);
-    } else {
-      setType("");
-      setAmount(0);
-      setDate("");
-      setDescription("");
-    }
+    if (recordToEdit) setForm(recordToEdit);
   }, [recordToEdit]);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === "amount" ? parseFloat(value) : value,
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
     try {
-      const record: FinanceRecord = {
-        id: recordToEdit?.id || Date.now().toString(),
-        type,
-        amount,
-        date,
-        description,
-      };
-
-      // Mock API delay
-      await new Promise((res) => setTimeout(res, 300));
-
-      onSuccess(record);
+      const method = recordToEdit ? "put" : "post";
+      const res = await axios[method]("/api/finance", form);
+      onSuccess(res.data);
+      toast.success(`Finance record ${recordToEdit ? "updated" : "added"}!`);
       onClose();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save finance record");
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error saving record");
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 flex items-center justify-center bg-black/40 z-50"
-    >
-      <motion.form
-        onSubmit={handleSubmit}
-        className="bg-deepest0 p-6 rounded-lg w-full max-w-md shadow-lg"
-      >
-        <h2 className="text-xl font-display text-lightGray mb-4">
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <h2 className="text-xl font-bold mb-4">
           {recordToEdit ? "Edit Finance Record" : "Add Finance Record"}
         </h2>
 
-        <label className="block text-lightGray mb-1">Type</label>
-        <input
-          type="text"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="w-full p-2 mb-3 rounded bg-secondary text-lightGray focus:outline-none focus:ring-2 focus:ring-accentPurple"
-          required
-        />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Type</label>
+            <select
+              name="type"
+              value={form.type}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              required
+            >
+              {financeTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <label className="block text-lightGray mb-1">Amount</label>
-        <input
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          className="w-full p-2 mb-3 rounded bg-secondary text-lightGray focus:outline-none focus:ring-2 focus:ring-accentPurple"
-          required
-        />
+          <div>
+            <label className="block text-sm font-medium mb-1">Amount</label>
+            <input
+              type="number"
+              name="amount"
+              value={form.amount}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              required
+            />
+          </div>
 
-        <label className="block text-lightGray mb-1">Date</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full p-2 mb-3 rounded bg-secondary text-lightGray focus:outline-none focus:ring-2 focus:ring-accentPurple"
-          required
-        />
+          <div>
+            <label className="block text-sm font-medium mb-1">Date</label>
+            <input
+              type="date"
+              name="date"
+              value={form.date.split("T")[0]}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              required
+            />
+          </div>
 
-        <label className="block text-lightGray mb-1">Description</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="w-full p-2 mb-4 rounded bg-secondary text-lightGray focus:outline-none focus:ring-2 focus:ring-accentPurple"
-          rows={3}
-          required
-        />
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Description
+            </label>
+            <input
+              type="text"
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              required
+            />
+          </div>
 
-        <div className="flex justify-end space-x-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-secondary text-lightGray rounded hover:bg-deeper transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
-          >
-            {loading ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </motion.form>
-    </motion.div>
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-accentTeal text-white rounded"
+            >
+              {recordToEdit ? "Update" : "Add"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

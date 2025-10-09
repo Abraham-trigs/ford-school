@@ -6,37 +6,62 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import DataTable from "@/components/common/Datable";
-import CafeteriaModal from "@/components/Cafeteria/CafeteriaModal";
+import CookStaffModal from "@/components/Cook/CookStaffModal";
 import DeleteModal from "@/components/common/DeleteModal";
-import LoaderModal from "@/components/layout/LoaderModal";
+import LoaderModal from "@/components/common/LoaderModal";
+import { CookStaff } from "@/types/cookStaff";
 
-export interface Cook {
-  id?: string;
-  name: string;
-  shift: string;
-  specialty: string;
-}
-
-export default function CafeteriaPage() {
-  const [records, setRecords] = useState<Cook[]>([]);
+export default function CookStaffPage() {
+  const [records, setRecords] = useState<CookStaff[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [recordToEdit, setRecordToEdit] = useState<Cook | undefined>();
+  const [recordToEdit, setRecordToEdit] = useState<CookStaff | undefined>();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<Cook | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<CookStaff | null>(null);
   const [user, setUser] = useState<{ role: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    axios.get("/api/auth/me").then((res) => setUser(res.data.user));
-    axios.get("/api/cafeteria").then((res) => setRecords(res.data));
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auth/me");
+        setUser(res.data.user);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchRecords = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/cook");
+        setRecords(res.data);
+      } catch (err: any) {
+        toast.error(
+          err.response?.data?.message || "Failed to fetch Cook Staff"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+    fetchRecords();
   }, []);
 
-  const handleCreate = () => setModalOpen(true);
-  const handleEdit = (record: Cook) => {
+  const handleCreate = () => {
+    setRecordToEdit(undefined);
+    setModalOpen(true);
+  };
+
+  const handleEdit = (record: CookStaff) => {
     setRecordToEdit(record);
     setModalOpen(true);
   };
-  const handleSuccess = (record: Cook) => {
+
+  const handleSuccess = (record: CookStaff) => {
     setRecords((prev) => {
       const index = prev.findIndex((r) => r.id === record.id);
       if (index > -1) {
@@ -45,36 +70,41 @@ export default function CafeteriaPage() {
       }
       return [record, ...prev];
     });
-    toast.success("Saved successfully!");
+    toast.success(`${record.name} saved successfully!`);
   };
 
-  const handleDeleteClick = (record: Cook) => {
+  const handleDeleteClick = (record: CookStaff) => {
     setRecordToDelete(record);
     setDeleteModalOpen(true);
   };
+
   const handleConfirmDelete = async () => {
     if (!recordToDelete) return;
     setLoading(true);
     try {
-      await axios.delete(`/api/cafeteria?id=${recordToDelete.id}`);
+      await axios.delete(`/api/cook?id=${recordToDelete.id}`);
       setRecords((prev) => prev.filter((r) => r.id !== recordToDelete.id));
-      toast.success("Deleted successfully!");
+      toast.success(`${recordToDelete.name} deleted successfully!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete record");
     } finally {
       setRecordToDelete(null);
       setLoading(false);
     }
   };
 
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
+
   const columns = [
     { header: "Name", accessor: "name" },
+    { header: "Email", accessor: "email" },
+    { header: "Phone", accessor: "phone" },
     { header: "Shift", accessor: "shift" },
-    { header: "Specialty", accessor: "specialty" },
+    { header: "Specialization", accessor: "specialization" },
     {
       header: "Actions",
       accessor: "actions",
-      render: (record: Cook) => (
+      render: (record: CookStaff) => (
         <div className="flex space-x-2">
           <button
             onClick={() => handleEdit(record)}
@@ -82,7 +112,7 @@ export default function CafeteriaPage() {
           >
             Edit
           </button>
-          {["ADMIN", "COOK"].includes(user?.role || "") && (
+          {["ADMIN", "PRINCIPAL"].includes(user.role) && (
             <button
               onClick={() => handleDeleteClick(record)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
@@ -95,36 +125,37 @@ export default function CafeteriaPage() {
     },
   ];
 
-  if (!user) return <LoaderModal isVisible text="Loading..." />;
-
   return (
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-display text-primary">Cafeteria / Cook</h1>
-        {["ADMIN", "COOK"].includes(user.role) && (
+        <h1 className="text-2xl font-display text-primary">Cook Staff</h1>
+        {["ADMIN", "PRINCIPAL"].includes(user.role) && (
           <button
             onClick={handleCreate}
             className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
           >
-            + Add Cook
+            + Add Staff
           </button>
         )}
       </div>
 
       <DataTable columns={columns} data={records} />
-      <CafeteriaModal
+
+      <CookStaffModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
-        recordToEdit={recordToEdit}
+        staffToEdit={recordToEdit}
       />
+
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Delete "${recordToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${recordToDelete?.name}"?`}
       />
+
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );

@@ -8,83 +8,130 @@ import "react-toastify/dist/ReactToastify.css";
 import DataTable from "@/components/common/Datable";
 import HRModal from "@/components/HR/HRModal";
 import DeleteModal from "@/components/common/DeleteModal";
-import LoaderModal from "@/components/layout/LoaderModal";
+import LoaderModal from "@/components/common/LoaderModal";
 
-export interface HRRecord {
+export interface HR {
   id?: string;
   name: string;
-  position: string;
-  department: string;
+  email: string;
+  phone?: string;
+  department?: string;
+  role?: string;
+}
+
+export interface User {
+  id: string;
+  role: string;
+  schoolId: string;
 }
 
 export default function HRPage() {
-  const [records, setRecords] = useState<HRRecord[]>([]);
+  const [hrs, setHRs] = useState<HR[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [recordToEdit, setRecordToEdit] = useState<HRRecord | undefined>();
+  const [hrToEdit, setHRToEdit] = useState<HR | undefined>();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<HRRecord | null>(null);
-  const [user, setUser] = useState<{ role: string } | null>(null);
+  const [hrToDelete, setHRToDelete] = useState<HR | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Fetch current user
   useEffect(() => {
-    axios.get("/api/auth/me").then((res) => setUser(res.data.user));
-    axios.get("/api/hr").then((res) => setRecords(res.data));
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auth/me");
+        setUser(res.data.user);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to load user");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUser();
   }, []);
 
-  const handleCreate = () => setModalOpen(true);
-  const handleEdit = (record: HRRecord) => {
-    setRecordToEdit(record);
+  // Fetch HR records
+  useEffect(() => {
+    const fetchHRs = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/hr");
+        setHRs(res.data);
+      } catch (err: any) {
+        toast.error(
+          err.response?.data?.message || "Failed to fetch HR records"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHRs();
+  }, []);
+
+  const handleCreate = () => {
+    setHRToEdit(undefined);
     setModalOpen(true);
   };
-  const handleSuccess = (record: HRRecord) => {
-    setRecords((prev) => {
-      const index = prev.findIndex((r) => r.id === record.id);
-      if (index > -1) {
-        prev[index] = record;
-        return [...prev];
-      }
-      return [record, ...prev];
-    });
-    toast.success("HR record saved!");
+
+  const handleEdit = (hr: HR) => {
+    setHRToEdit(hr);
+    setModalOpen(true);
   };
 
-  const handleDeleteClick = (record: HRRecord) => {
-    setRecordToDelete(record);
+  const handleSuccess = (hr: HR) => {
+    setHRs((prev) => {
+      const index = prev.findIndex((h) => h.id === hr.id);
+      if (index > -1) {
+        prev[index] = hr;
+        return [...prev];
+      }
+      return [hr, ...prev];
+    });
+    toast.success(`HR ${hr.name} saved successfully!`);
+  };
+
+  const handleDeleteClick = (hr: HR) => {
+    setHRToDelete(hr);
     setDeleteModalOpen(true);
   };
+
   const handleConfirmDelete = async () => {
-    if (!recordToDelete) return;
+    if (!hrToDelete) return;
     setLoading(true);
     try {
-      await axios.delete(`/api/hr?id=${recordToDelete.id}`);
-      setRecords((prev) => prev.filter((r) => r.id !== recordToDelete.id));
-      toast.success("Deleted successfully!");
+      await axios.delete(`/api/hr?id=${hrToDelete.id}`);
+      setHRs((prev) => prev.filter((h) => h.id !== hrToDelete.id));
+      toast.success(`HR ${hrToDelete.name} deleted successfully!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete HR");
     } finally {
-      setRecordToDelete(null);
+      setHRToDelete(null);
       setLoading(false);
     }
   };
 
+  if (!user) return <LoaderModal isVisible={true} text="Loading user..." />;
+
   const columns = [
     { header: "Name", accessor: "name" },
-    { header: "Position", accessor: "position" },
+    { header: "Email", accessor: "email" },
+    { header: "Phone", accessor: "phone" },
     { header: "Department", accessor: "department" },
+    { header: "Role", accessor: "role" },
     {
       header: "Actions",
       accessor: "actions",
-      render: (record: HRRecord) => (
+      render: (hr: HR) => (
         <div className="flex space-x-2">
           <button
-            onClick={() => handleEdit(record)}
+            onClick={() => handleEdit(hr)}
             className="px-3 py-1 bg-accentTeal text-background rounded"
           >
             Edit
           </button>
-          {["ADMIN", "HR"].includes(user?.role || "") && (
+          {["ADMIN", "PRINCIPAL", "HR"].includes(user.role) && (
             <button
-              onClick={() => handleDeleteClick(record)}
+              onClick={() => handleDeleteClick(hr)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
             >
               Delete
@@ -95,37 +142,37 @@ export default function HRPage() {
     },
   ];
 
-  if (!user) return <LoaderModal isVisible text="Loading..." />;
-
   return (
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-display text-primary">HR</h1>
-        {["ADMIN", "HR"].includes(user.role) && (
+        <h1 className="text-2xl font-display text-primary">HR Records</h1>
+        {["ADMIN", "PRINCIPAL", "HR"].includes(user.role) && (
           <button
-            onClick={handleCreate}
             className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
+            onClick={handleCreate}
           >
-            + Add Employee
+            + Add HR
           </button>
         )}
       </div>
 
-      <DataTable columns={columns} data={records} />
+      <DataTable columns={columns} data={hrs} />
 
       <HRModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
-        recordToEdit={recordToEdit}
+        hrToEdit={hrToEdit}
       />
+
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Delete "${recordToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${hrToDelete?.name}"?`}
       />
+
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );

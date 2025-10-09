@@ -3,11 +3,11 @@ import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";
 
-// Class schema
 export const classSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  grade: z.string(),
+  level: z.string(),
+  teacherId: z.string().optional(),
 });
 
 export const GET = async (req: Request) => {
@@ -17,7 +17,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.class,
     schema: classSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "TEACHER"],
+    allowedRoles: ["ADMIN", "HEAD_TEACHER", "TEACHER"],
     resourceName: "Class",
   })(req as any, user);
 };

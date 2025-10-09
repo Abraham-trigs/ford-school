@@ -1,14 +1,14 @@
+// src/app/api/auditors/route.ts
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";
 
-// Auditor schema
 export const auditorSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
   department: z.string(),
-  contact: z.string(),
+  level: z.string(),
 });
 
 export const GET = async (req: Request) => {
@@ -18,7 +18,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.auditor,
     schema: auditorSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "AUDITOR"],
+    allowedRoles: ["ADMIN", "AUDITOR"],
     resourceName: "Auditor",
   })(req as any, user);
 };

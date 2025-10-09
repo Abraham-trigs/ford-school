@@ -1,16 +1,14 @@
-// src/app/api/inspector/route.ts
+// src/app/api/inspectors/route.ts
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";
 
-// Inspector schema
 export const inspectorSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  department: z.string().optional(),
+  department: z.string(),
+  level: z.string(),
 });
 
 export const GET = async (req: Request) => {
@@ -21,7 +19,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.inspector,
     schema: inspectorSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "INSPECTOR"],
+    allowedRoles: ["ADMIN", "INSPECTOR"],
     resourceName: "Inspector",
   })(req as any, user);
 };

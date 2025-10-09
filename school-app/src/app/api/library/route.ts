@@ -4,12 +4,12 @@ import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";
 
-// Library staff schema
 export const librarySchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  email: z.string().email(),
-  phone: z.string().optional(),
+  category: z.string(),
+  quantity: z.number(),
+  location: z.string(),
 });
 
 export const GET = async (req: Request) => {
@@ -20,7 +20,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.library,
     schema: librarySchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "LIBRARIAN"],
+    allowedRoles: ["ADMIN", "LIBRARY"],
     resourceName: "Library",
   })(req as any, user);
 };

@@ -4,13 +4,13 @@ import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";
 
-// Cook / Cafeteria staff schema
-export const cookSchema = z.object({
+export const cookStaffSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
   email: z.string().email(),
   phone: z.string().optional(),
-  shift: z.string().optional(),
+  shift: z.string(),
+  specialization: z.string().optional(),
 });
 
 export const GET = async (req: Request) => {
@@ -19,10 +19,10 @@ export const GET = async (req: Request) => {
     return new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401 });
 
   return createCRUDHandler({
-    model: prisma.cook,
-    schema: cookSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "COOK"],
-    resourceName: "Cook",
+    model: prisma.cookStaff,
+    schema: cookStaffSchema,
+    allowedRoles: ["ADMIN", "PRINCIPAL"],
+    resourceName: "Cook Staff",
   })(req as any, user);
 };
 

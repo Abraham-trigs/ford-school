@@ -6,23 +6,10 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import DataTable from "@/components/common/Datable";
-import ExamsModal from "@/components/exams/ExamsModal";
+import ExamModal from "@/components/exams/ExamModal";
 import DeleteModal from "@/components/common/DeleteModal";
 import LoaderModal from "@/components/common/LoaderModal";
-
-export interface Exam {
-  id?: string;
-  name: string;
-  class: string;
-  subject: string;
-  date: string;
-}
-
-export interface User {
-  id: string;
-  role: string;
-  schoolId: string;
-}
+import { Exam } from "@/types/Exam";
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
@@ -30,19 +17,16 @@ export default function ExamsPage() {
   const [examToEdit, setExamToEdit] = useState<Exam | undefined>();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<{ role: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
-      setLoading(true);
       try {
         const res = await axios.get("/api/auth/me");
         setUser(res.data.user);
       } catch (err: any) {
-        toast.error(err.response?.data?.message || "Failed to fetch user");
-      } finally {
-        setLoading(false);
+        toast.error(err.response?.data?.message || "Failed to load user");
       }
     };
     fetchUser();
@@ -75,14 +59,14 @@ export default function ExamsPage() {
 
   const handleSuccess = (exam: Exam) => {
     setExams((prev) => {
-      const index = prev.findIndex((e) => e.id === exam.id);
-      if (index > -1) {
-        prev[index] = exam;
+      const idx = prev.findIndex((e) => e.id === exam.id);
+      if (idx > -1) {
+        prev[idx] = exam;
         return [...prev];
       }
       return [exam, ...prev];
     });
-    toast.success("Exam saved successfully!");
+    toast.success(`Exam ${exam.title} saved successfully!`);
   };
 
   const handleDeleteClick = (exam: Exam) => {
@@ -96,7 +80,7 @@ export default function ExamsPage() {
     try {
       await axios.delete(`/api/exams?id=${examToDelete.id}`);
       setExams((prev) => prev.filter((e) => e.id !== examToDelete.id));
-      toast.success("Exam deleted successfully!");
+      toast.success(`Exam ${examToDelete.title} deleted successfully!`);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to delete exam");
     } finally {
@@ -105,13 +89,13 @@ export default function ExamsPage() {
     }
   };
 
-  if (!user) return <LoaderModal isVisible={true} text="Loading exams..." />;
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
 
   const columns = [
-    { header: "Name", accessor: "name" },
-    { header: "Class", accessor: "class" },
-    { header: "Subject", accessor: "subject" },
+    { header: "Title", accessor: "title" },
+    { header: "Description", accessor: "description" },
     { header: "Date", accessor: "date" },
+    { header: "Class ID", accessor: "classId" },
     {
       header: "Actions",
       accessor: "actions",
@@ -123,13 +107,7 @@ export default function ExamsPage() {
           >
             Edit
           </button>
-          {[
-            "ADMIN",
-            "PRINCIPAL",
-            "VICE_PRINCIPAL",
-            "TEACHER",
-            "EXAM_OFFICER",
-          ].includes(user.role) && (
+          {["ADMIN", "PRINCIPAL", "TEACHER"].includes(user.role) && (
             <button
               onClick={() => handleDeleteClick(exam)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
@@ -147,13 +125,7 @@ export default function ExamsPage() {
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-display text-primary">Exams</h1>
-        {[
-          "ADMIN",
-          "PRINCIPAL",
-          "VICE_PRINCIPAL",
-          "TEACHER",
-          "EXAM_OFFICER",
-        ].includes(user.role) && (
+        {["ADMIN", "PRINCIPAL", "TEACHER"].includes(user.role) && (
           <button
             className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
             onClick={handleCreate}
@@ -164,21 +136,18 @@ export default function ExamsPage() {
       </div>
 
       <DataTable columns={columns} data={exams} />
-
-      <ExamsModal
+      <ExamModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
         examToEdit={examToEdit}
       />
-
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Are you sure you want to delete "${examToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${examToDelete?.title}"?`}
       />
-
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );

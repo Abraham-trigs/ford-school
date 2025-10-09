@@ -8,64 +8,90 @@ import "react-toastify/dist/ReactToastify.css";
 import DataTable from "@/components/common/Datable";
 import AuditorModal from "@/components/Auditor/AuditorModal";
 import DeleteModal from "@/components/common/DeleteModal";
-import LoaderModal from "@/components/layout/LoaderModal";
-
-export interface Auditor {
-  id?: string;
-  name: string;
-  department: string;
-  level: string;
-}
+import LoaderModal from "@/components/common/LoaderModal";
+import { Auditor } from "@/types/Auditor";
 
 export default function AuditorPage() {
-  const [records, setRecords] = useState<Auditor[]>([]);
+  const [auditors, setAuditors] = useState<Auditor[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [recordToEdit, setRecordToEdit] = useState<Auditor | undefined>();
+  const [auditorToEdit, setAuditorToEdit] = useState<Auditor | undefined>();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<Auditor | null>(null);
-  const [user, setUser] = useState<{ role: string } | null>(null);
+  const [auditorToDelete, setAuditorToDelete] = useState<Auditor | null>(null);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<{ role: string } | null>(null);
 
   useEffect(() => {
-    axios.get("/api/auth/me").then((res) => setUser(res.data.user));
-    axios.get("/api/auditors").then((res) => setRecords(res.data));
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auth/me");
+        setUser(res.data.user);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchAuditors = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auditors");
+        setAuditors(res.data);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch auditors");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+    fetchAuditors();
   }, []);
 
-  const handleCreate = () => setModalOpen(true);
-  const handleEdit = (record: Auditor) => {
-    setRecordToEdit(record);
+  const handleCreate = () => {
+    setAuditorToEdit(undefined);
     setModalOpen(true);
   };
-  const handleSuccess = (record: Auditor) => {
-    setRecords((prev) => {
-      const index = prev.findIndex((r) => r.id === record.id);
-      if (index > -1) {
-        prev[index] = record;
-        return [...prev];
-      }
-      return [record, ...prev];
-    });
-    toast.success("Saved successfully!");
+
+  const handleEdit = (auditor: Auditor) => {
+    setAuditorToEdit(auditor);
+    setModalOpen(true);
   };
 
-  const handleDeleteClick = (record: Auditor) => {
-    setRecordToDelete(record);
+  const handleSuccess = (auditor: Auditor) => {
+    setAuditors((prev) => {
+      const index = prev.findIndex((a) => a.id === auditor.id);
+      if (index > -1) {
+        prev[index] = auditor;
+        return [...prev];
+      }
+      return [auditor, ...prev];
+    });
+    toast.success(`${auditor.name} saved successfully!`);
+  };
+
+  const handleDeleteClick = (auditor: Auditor) => {
+    setAuditorToDelete(auditor);
     setDeleteModalOpen(true);
   };
+
   const handleConfirmDelete = async () => {
-    if (!recordToDelete) return;
+    if (!auditorToDelete) return;
     setLoading(true);
     try {
-      await axios.delete(`/api/auditors?id=${recordToDelete.id}`);
-      setRecords((prev) => prev.filter((r) => r.id !== recordToDelete.id));
-      toast.success("Deleted successfully!");
+      await axios.delete(`/api/auditors?id=${auditorToDelete.id}`);
+      setAuditors((prev) => prev.filter((a) => a.id !== auditorToDelete.id));
+      toast.success(`${auditorToDelete.name} deleted successfully!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete auditor");
     } finally {
-      setRecordToDelete(null);
+      setAuditorToDelete(null);
       setLoading(false);
     }
   };
+
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
 
   const columns = [
     { header: "Name", accessor: "name" },
@@ -74,17 +100,17 @@ export default function AuditorPage() {
     {
       header: "Actions",
       accessor: "actions",
-      render: (record: Auditor) => (
+      render: (auditor: Auditor) => (
         <div className="flex space-x-2">
           <button
-            onClick={() => handleEdit(record)}
+            onClick={() => handleEdit(auditor)}
             className="px-3 py-1 bg-accentTeal text-background rounded"
           >
             Edit
           </button>
-          {["ADMIN", "AUDITOR"].includes(user?.role || "") && (
+          {["ADMIN", "AUDITOR"].includes(user.role) && (
             <button
-              onClick={() => handleDeleteClick(record)}
+              onClick={() => handleDeleteClick(auditor)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
             >
               Delete
@@ -94,8 +120,6 @@ export default function AuditorPage() {
       ),
     },
   ];
-
-  if (!user) return <LoaderModal isVisible text="Loading..." />;
 
   return (
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
@@ -112,19 +136,22 @@ export default function AuditorPage() {
         )}
       </div>
 
-      <DataTable columns={columns} data={records} />
+      <DataTable columns={columns} data={auditors} />
+
       <AuditorModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
-        recordToEdit={recordToEdit}
+        auditorToEdit={auditorToEdit}
       />
+
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Delete "${recordToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${auditorToDelete?.name}"?`}
       />
+
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );

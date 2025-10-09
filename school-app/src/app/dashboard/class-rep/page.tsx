@@ -8,14 +8,8 @@ import "react-toastify/dist/ReactToastify.css";
 import DataTable from "@/components/common/Datable";
 import ClassRepModal from "@/components/ClassRep/ClassRepModal";
 import DeleteModal from "@/components/common/DeleteModal";
-import LoaderModal from "@/components/layout/LoaderModal";
-
-export interface ClassRep {
-  id?: string;
-  name: string;
-  class: string;
-  contact: string;
-}
+import LoaderModal from "@/components/common/LoaderModal";
+import { ClassRep } from "@/types/ClassRep";
 
 export default function ClassRepPage() {
   const [records, setRecords] = useState<ClassRep[]>([]);
@@ -26,17 +20,47 @@ export default function ClassRepPage() {
   const [user, setUser] = useState<{ role: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch user and records
   useEffect(() => {
-    axios.get("/api/auth/me").then((res) => setUser(res.data.user));
-    axios.get("/api/class-reps").then((res) => setRecords(res.data));
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auth/me");
+        setUser(res.data.user);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchRecords = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/class-reps");
+        setRecords(res.data);
+      } catch (err: any) {
+        toast.error(
+          err.response?.data?.message || "Failed to fetch Class Reps"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+    fetchRecords();
   }, []);
 
-  const handleCreate = () => setModalOpen(true);
+  const handleCreate = () => {
+    setRecordToEdit(undefined);
+    setModalOpen(true);
+  };
+
   const handleEdit = (record: ClassRep) => {
     setRecordToEdit(record);
     setModalOpen(true);
   };
+
   const handleSuccess = (record: ClassRep) => {
     setRecords((prev) => {
       const index = prev.findIndex((r) => r.id === record.id);
@@ -46,32 +70,36 @@ export default function ClassRepPage() {
       }
       return [record, ...prev];
     });
-    toast.success("Saved successfully!");
+    toast.success(`${record.name} saved successfully!`);
   };
 
   const handleDeleteClick = (record: ClassRep) => {
     setRecordToDelete(record);
     setDeleteModalOpen(true);
   };
+
   const handleConfirmDelete = async () => {
     if (!recordToDelete) return;
     setLoading(true);
     try {
       await axios.delete(`/api/class-reps?id=${recordToDelete.id}`);
       setRecords((prev) => prev.filter((r) => r.id !== recordToDelete.id));
-      toast.success("Deleted successfully!");
+      toast.success(`${recordToDelete.name} deleted successfully!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete record");
     } finally {
       setRecordToDelete(null);
       setLoading(false);
     }
   };
 
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
+
   const columns = [
     { header: "Name", accessor: "name" },
-    { header: "Class", accessor: "class" },
-    { header: "Contact", accessor: "contact" },
+    { header: "Email", accessor: "email" },
+    { header: "Phone", accessor: "phone" },
+    { header: "Class ID", accessor: "classId" },
     {
       header: "Actions",
       accessor: "actions",
@@ -83,7 +111,7 @@ export default function ClassRepPage() {
           >
             Edit
           </button>
-          {["ADMIN", "PRINCIPAL", "TEACHER"].includes(user?.role || "") && (
+          {["ADMIN", "TEACHER"].includes(user.role) && (
             <button
               onClick={() => handleDeleteClick(record)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
@@ -96,16 +124,12 @@ export default function ClassRepPage() {
     },
   ];
 
-  if (!user) return <LoaderModal isVisible text="Loading..." />;
-
   return (
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-display text-primary">
-          Class Representatives
-        </h1>
-        {["ADMIN", "PRINCIPAL", "TEACHER"].includes(user.role) && (
+        <h1 className="text-2xl font-display text-primary">Class Reps</h1>
+        {["ADMIN", "TEACHER"].includes(user.role) && (
           <button
             onClick={handleCreate}
             className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
@@ -116,18 +140,21 @@ export default function ClassRepPage() {
       </div>
 
       <DataTable columns={columns} data={records} />
+
       <ClassRepModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
-        recordToEdit={recordToEdit}
+        repToEdit={recordToEdit}
       />
+
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Delete "${recordToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${recordToDelete?.name}"?`}
       />
+
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );

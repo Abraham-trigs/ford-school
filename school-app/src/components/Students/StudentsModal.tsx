@@ -3,21 +3,14 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
+import { Student, StudentClasses } from "@/types/students";
 
-type Student = {
-  id?: string;
-  name: string;
-  class: string;
-  age: number;
-  parent: string;
-};
-
-type StudentModalProps = {
+interface StudentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (student: Student) => void;
   studentToEdit?: Student;
-};
+}
 
 export default function StudentModal({
   isOpen,
@@ -26,7 +19,7 @@ export default function StudentModal({
   studentToEdit,
 }: StudentModalProps) {
   const [name, setName] = useState("");
-  const [studentClass, setStudentClass] = useState("");
+  const [studentClass, setStudentClass] = useState<StudentClasses | string>("");
   const [age, setAge] = useState<number>(0);
   const [parent, setParent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,20 +41,13 @@ export default function StudentModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      let res;
       const payload = { name, class: studentClass, age, parent };
+      const res = studentToEdit?.id
+        ? await axios.put(`/api/students?id=${studentToEdit.id}`, payload)
+        : await axios.post("/api/students", payload);
 
-      if (studentToEdit?.id) {
-        // Edit existing student
-        res = await axios.put(`/api/students?id=${studentToEdit.id}`, payload);
-      } else {
-        // Create new student
-        res = await axios.post("/api/students", payload);
-      }
-
-      onSuccess(res.data); // updated student returned from API
+      onSuccess(res.data);
       onClose();
     } catch (err: any) {
       console.error(err);
@@ -98,13 +84,19 @@ export default function StudentModal({
         />
 
         <label className="block text-lightGray mb-1">Class</label>
-        <input
-          type="text"
+        <select
           value={studentClass}
           onChange={(e) => setStudentClass(e.target.value)}
           className="w-full p-2 mb-3 rounded bg-secondary text-lightGray focus:outline-none focus:ring-2 focus:ring-accentPurple"
           required
-        />
+        >
+          <option value="">Select class</option>
+          {Object.values(StudentClasses).map((cls) => (
+            <option key={cls} value={cls}>
+              {cls}
+            </option>
+          ))}
+        </select>
 
         <label className="block text-lightGray mb-1">Age</label>
         <input

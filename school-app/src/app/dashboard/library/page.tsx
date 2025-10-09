@@ -9,40 +9,59 @@ import DataTable from "@/components/common/Datable";
 import LibraryModal from "@/components/Library/LibraryModal";
 import DeleteModal from "@/components/common/DeleteModal";
 import LoaderModal from "@/components/common/LoaderModal";
-
-export interface LibraryRecord {
-  id?: string;
-  title: string;
-  author: string;
-  isbn: string;
-  copies: number;
-}
+import { Library } from "@/types/library";
 
 export default function LibraryPage() {
-  const [records, setRecords] = useState<LibraryRecord[]>([]);
+  const [records, setRecords] = useState<Library[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [recordToEdit, setRecordToEdit] = useState<LibraryRecord | undefined>();
+  const [recordToEdit, setRecordToEdit] = useState<Library | undefined>();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<LibraryRecord | null>(
-    null
-  );
+  const [recordToDelete, setRecordToDelete] = useState<Library | null>(null);
   const [user, setUser] = useState<{ role: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    axios.get("/api/auth/me").then((res) => setUser(res.data.user));
+    const fetchUser = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/auth/me");
+        setUser(res.data.user);
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchRecords = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get("/api/library");
+        setRecords(res.data);
+      } catch (err: any) {
+        toast.error(
+          err.response?.data?.message || "Failed to fetch library records"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+    fetchRecords();
   }, []);
 
-  useEffect(() => {
-    axios.get("/api/library").then((res) => setRecords(res.data));
-  }, []);
+  const handleCreate = () => {
+    setRecordToEdit(undefined);
+    setModalOpen(true);
+  };
 
-  const handleCreate = () => setModalOpen(true);
-  const handleEdit = (record: LibraryRecord) => {
+  const handleEdit = (record: Library) => {
     setRecordToEdit(record);
     setModalOpen(true);
   };
-  const handleSuccess = (record: LibraryRecord) => {
+
+  const handleSuccess = (record: Library) => {
     setRecords((prev) => {
       const index = prev.findIndex((r) => r.id === record.id);
       if (index > -1) {
@@ -51,37 +70,40 @@ export default function LibraryPage() {
       }
       return [record, ...prev];
     });
-    toast.success("Library record saved!");
+    toast.success(`${record.name} saved successfully!`);
   };
 
-  const handleDeleteClick = (record: LibraryRecord) => {
+  const handleDeleteClick = (record: Library) => {
     setRecordToDelete(record);
     setDeleteModalOpen(true);
   };
+
   const handleConfirmDelete = async () => {
     if (!recordToDelete) return;
     setLoading(true);
     try {
       await axios.delete(`/api/library?id=${recordToDelete.id}`);
       setRecords((prev) => prev.filter((r) => r.id !== recordToDelete.id));
-      toast.success("Deleted successfully!");
+      toast.success(`${recordToDelete.name} deleted successfully!`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete record");
     } finally {
       setRecordToDelete(null);
       setLoading(false);
     }
   };
 
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
+
   const columns = [
-    { header: "Title", accessor: "title" },
-    { header: "Author", accessor: "author" },
-    { header: "ISBN", accessor: "isbn" },
-    { header: "Copies", accessor: "copies" },
+    { header: "Name", accessor: "name" },
+    { header: "Category", accessor: "category" },
+    { header: "Quantity", accessor: "quantity" },
+    { header: "Location", accessor: "location" },
     {
       header: "Actions",
       accessor: "actions",
-      render: (record: LibraryRecord) => (
+      render: (record: Library) => (
         <div className="flex space-x-2">
           <button
             onClick={() => handleEdit(record)}
@@ -89,7 +111,7 @@ export default function LibraryPage() {
           >
             Edit
           </button>
-          {["ADMIN", "LIBRARIAN"].includes(user?.role || "") && (
+          {["ADMIN", "LIBRARY"].includes(user.role) && (
             <button
               onClick={() => handleDeleteClick(record)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
@@ -102,19 +124,17 @@ export default function LibraryPage() {
     },
   ];
 
-  if (!user) return <LoaderModal isVisible text="Loading..." />;
-
   return (
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-display text-primary">Library</h1>
-        {["ADMIN", "LIBRARIAN"].includes(user.role) && (
+        {["ADMIN", "LIBRARY"].includes(user.role) && (
           <button
             onClick={handleCreate}
             className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
           >
-            + Add Book
+            + Add Record
           </button>
         )}
       </div>
@@ -125,15 +145,18 @@ export default function LibraryPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={handleSuccess}
-        recordToEdit={recordToEdit}
+        libraryToEdit={recordToEdit}
       />
+
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
-        message={`Delete "${recordToDelete?.title}"?`}
+        message={`Are you sure you want to delete "${recordToDelete?.name}"?`}
       />
+
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );
 }
+w;

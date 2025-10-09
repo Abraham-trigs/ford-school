@@ -1,180 +1,149 @@
-// prisma/seed.ts
-import { PrismaClient, RoleType, GradeLevel } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { PrismaClient, Role, FinanceType, FinanceCategory, FinanceStatus, TransactionDirection, PaymentMethod } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 const prisma = new PrismaClient();
 
-async function hashPassword(password: string) {
-  const salt = await bcrypt.genSalt(10);
-  return bcrypt.hash(password, salt);
-}
-
 async function main() {
-  console.log('Start seeding...');
+  console.log("🌱 Seeding database with finance-related data...");
 
-  // --- Clear existing data ---
-  await prisma.userSchoolSession.deleteMany();
-  await prisma.userSession.deleteMany();
-  await prisma.superAdminSession.deleteMany();
-  await prisma.superAdminProfile.deleteMany();
-  await prisma.superAdmin.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.schoolSession.deleteMany();
-  await prisma.classroom.deleteMany();
-  await prisma.studentProfile.deleteMany();
-  await prisma.teacherProfile.deleteMany();
-  console.log('Existing data cleared.');
-
-  // --- Create master SuperAdmin user ---
-  const superAdminPassword = await hashPassword('SuperAdmin@123');
-  const superAdminUser = await prisma.user.create({
-    data: {
-      email: 'superadmin@astire.app',
-      fullName: 'Master SuperAdmin',
-      humanId: 'SYS-SA-001',
-      role: RoleType.SUPERADMIN,
-    },
-  });
-  console.log('SuperAdmin created:', superAdminUser.id);
-
-  // --- Create SuperAdmin extension ---
-  await prisma.superAdmin.create({
-    data: {
-      userId: superAdminUser.id,
-      metadata: { note: 'Top-level admin' },
-    },
-  });
-
-  // --- Create SuperAdmin Profile ---
-  await prisma.superAdminProfile.create({
-    data: {
-      userId: superAdminUser.id,
-      name: 'Master SuperAdmin',
-      title: 'Founder',
-      bio: 'The top system administrator.',
-    },
-  });
-
-  // --- Create School Session ---
+  // 1️⃣ Create a school session
   const schoolSession = await prisma.schoolSession.create({
     data: {
-      name: 'Bright Horizons Academy',
-      slug: 'bha-2025',
-      startDate: new Date('2025-09-01'),
-      endDate: new Date('2026-06-30'),
-      metadata: { setupComplete: true },
-      superAdmin: { connect: { userId: superAdminUser.id } },
+      name: "Springfield High Session 2025",
+      domain: "springfield.edu",
     },
   });
-  console.log('SchoolSession created:', schoolSession.id);
 
-  // --- Create School Admin ---
-  const schoolAdminPassword = await hashPassword('Admin@123');
-  const schoolAdminUser = await prisma.user.create({
+  // 2️⃣ Create a school linked to the session
+  const school = await prisma.school.create({
     data: {
-      email: 'admin@bha.edu',
-      fullName: 'Alice Johnson',
-      humanId: 'BHA-ADM-001',
-      role: RoleType.ADMIN,
+      name: "Springfield High School",
+      address: "742 Evergreen Terrace",
     },
   });
 
-  await prisma.userSchoolSession.create({
+  // 3️⃣ Create a user (Finance Officer)
+  const financeUser = await prisma.userSession.create({
     data: {
-      humanId: 'BHA-ADM-001',
-      userId: schoolAdminUser.id,
-      schoolSessionId: schoolSession.id,
-      email: schoolAdminUser.email,
-      password: schoolAdminPassword,
-      role: RoleType.ADMIN,
+      email: "finance@springfield.edu",
+      passwordHash: "hashedpassword123", // ⚠️ Replace in production with bcrypt hash
+      role: Role.FINANCE,
+      schoolId: schoolSession.id,
     },
   });
-  console.log('School Admin created:', schoolAdminUser.id);
 
-  // --- Create Teacher ---
-  const teacherPassword = await hashPassword('Teacher@123');
-  const teacherUser = await prisma.user.create({
+  // 4️⃣ Create a teacher and student for context
+  await prisma.teacher.create({
     data: {
-      email: 'teacher@bha.edu',
-      fullName: 'Mr. David Smith',
-      humanId: 'BHA-TCH-005',
-      role: RoleType.TEACHER,
+      firstName: "Edna",
+      lastName: "Krabappel",
+      email: "edna.krabappel@springfield.edu",
+      subjects: ["Math", "Science"],
+      classes: ["Class A"],
+      schoolId: school.id,
     },
   });
 
-  await prisma.teacherProfile.create({
+  await prisma.student.create({
     data: {
-      userId: teacherUser.id,
-      name: 'Mr. David Smith',
-      title: 'Senior Teacher',
-      bio: 'Teaches Grade 5 English.',
-      employeeId: 'BHA-TCH-005',
-      hireDate: new Date('2023-08-01'),
+      firstName: "Bart",
+      lastName: "Simpson",
+      class: "Class A",
+      age: 10,
+      parentName: "Homer Simpson",
+      schoolId: school.id,
     },
   });
 
-  await prisma.userSchoolSession.create({
+  // 5️⃣ Create Finance Records
+  const tuitionIncome = await prisma.financeRecord.create({
     data: {
-      humanId: 'BHA-TCH-005',
-      userId: teacherUser.id,
-      schoolSessionId: schoolSession.id,
-      email: teacherUser.email,
-      password: teacherPassword,
-      role: RoleType.TEACHER,
+      schoolId: school.id,
+      createdById: financeUser.id,
+      type: FinanceType.INCOME,
+      category: FinanceCategory.TUITION,
+      amount: new Decimal(5000),
+      description: "Tuition payments for Q1",
+      status: FinanceStatus.APPROVED,
+      date: new Date("2025-01-15"),
     },
   });
-  console.log('Teacher created:', teacherUser.id);
 
-  // --- Create Classroom ---
-  const classroom = await prisma.classroom.create({
+  const salaryExpense = await prisma.financeRecord.create({
     data: {
-      name: 'Grade 5A',
-      gradeLevel: GradeLevel.GRADE_5,
-      schoolSessionId: schoolSession.id,
-      teacherId: teacherUser.id,
+      schoolId: school.id,
+      createdById: financeUser.id,
+      type: FinanceType.EXPENSE,
+      category: FinanceCategory.SALARY,
+      amount: new Decimal(3000),
+      description: "Teacher salaries for January",
+      status: FinanceStatus.APPROVED,
+      date: new Date("2025-01-31"),
     },
   });
-  console.log('Classroom created:', classroom.id);
 
-  // --- Create Student ---
-  const studentPassword = await hashPassword('Student@123');
-  const studentUser = await prisma.user.create({
+  // 6️⃣ Finance Transactions
+  await prisma.financeTransaction.createMany({
+    data: [
+      {
+        recordId: tuitionIncome.id,
+        amount: new Decimal(5000),
+        direction: TransactionDirection.INFLOW,
+        method: PaymentMethod.BANK_TRANSFER,
+        reference: "TXN-TUITION-001",
+      },
+      {
+        recordId: salaryExpense.id,
+        amount: new Decimal(3000),
+        direction: TransactionDirection.OUTFLOW,
+        method: PaymentMethod.BANK_TRANSFER,
+        reference: "TXN-SALARY-001",
+      },
+    ],
+  });
+
+  // 7️⃣ Finance Budgets
+  await prisma.financeBudget.createMany({
+    data: [
+      {
+        schoolId: school.id,
+        year: 2025,
+        category: FinanceCategory.TUITION,
+        allocated: new Decimal(20000),
+        spent: new Decimal(5000),
+        remaining: new Decimal(15000),
+      },
+      {
+        schoolId: school.id,
+        year: 2025,
+        category: FinanceCategory.SALARY,
+        allocated: new Decimal(15000),
+        spent: new Decimal(3000),
+        remaining: new Decimal(12000),
+      },
+    ],
+  });
+
+  // 8️⃣ Cache entry (mock AI insight)
+  await prisma.financeInsightCache.create({
     data: {
-      email: 'student@bha.edu',
-      fullName: 'Emily Davis',
-      humanId: 'BHA-STU-010',
-      role: RoleType.STUDENT,
+      schoolId: school.id,
+      data: {
+        summary: "School finances are stable with positive cash flow.",
+        trends: ["Tuition payments increased by 10%", "Staff costs stable"],
+        recommendations: ["Consider increasing savings", "Automate payroll"],
+      },
+      generatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3600 * 1000),
     },
   });
 
-  await prisma.studentProfile.create({
-    data: {
-      userId: studentUser.id,
-      name: 'Emily Davis',
-      admissionNumber: 'ADM-010',
-      currentGrade: GradeLevel.GRADE_5,
-      classroomId: classroom.id,
-    },
-  });
-
-  await prisma.userSchoolSession.create({
-    data: {
-      humanId: 'BHA-STU-010',
-      userId: studentUser.id,
-      schoolSessionId: schoolSession.id,
-      email: studentUser.email,
-      password: studentPassword,
-      role: RoleType.STUDENT,
-    },
-  });
-  console.log('Student created:', studentUser.id);
-
-  console.log('Seeding complete.');
+  console.log("✅ Seeding completed successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("❌ Seeding error:", e);
     process.exit(1);
   })
   .finally(async () => {

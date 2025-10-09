@@ -10,19 +10,7 @@ import StudentModal from "@/components/Students/StudentsModal";
 import DeleteModal from "@/components/common/DeleteModal";
 import LoaderModal from "@/components/common/LoaderModal";
 
-export interface Student {
-  id?: string;
-  name: string;
-  class: string;
-  age: number;
-  parent: string;
-}
-
-export interface User {
-  id: string;
-  role: string;
-  schoolId: string;
-}
+import { Student, User, Roles } from "@/types/students";
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -107,7 +95,7 @@ export default function StudentsPage() {
     }
   };
 
-  if (!user) return <LoaderModal isVisible={true} text="Loading user..." />;
+  if (!user) return <LoaderModal isVisible text="Loading user..." />;
 
   const columns = [
     { header: "Name", accessor: "name" },
@@ -125,7 +113,7 @@ export default function StudentsPage() {
           >
             Edit
           </button>
-          {["ADMIN", "PRINCIPAL", "TEACHER"].includes(user.role) && (
+          {Roles.includes(user.role as any) && (
             <button
               onClick={() => handleDeleteClick(student)}
               className="px-3 py-1 bg-error text-background rounded hover:bg-errorPink transition-colors"
@@ -143,10 +131,10 @@ export default function StudentsPage() {
       <ToastContainer position="top-right" autoClose={3000} />
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-display text-primary">Students</h1>
-        {["ADMIN", "PRINCIPAL", "TEACHER"].includes(user.role) && (
+        {Roles.includes(user.role as any) && (
           <button
-            className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
             onClick={handleCreate}
+            className="px-4 py-2 bg-accentPurple text-background rounded hover:bg-purple0 transition-colors"
           >
             + Add Student
           </button>
