@@ -1,12 +1,11 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 ///////////////////////
@@ -56,13 +55,19 @@ enum PaymentMethod {
 ///////////////////////
 
 model SchoolSession {
-  id          String        @id @default(cuid())
-  name        String
-  domain      String?       // optional subdomain for multi-tenant routing
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  users       UserSession[] // one-to-many: users in this school-session (admin accounts)
+  id              String              @id @default(cuid())
+  name            String
+  domain          String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now())
+
+  users           UserSession[]
+
+  createdRecords  FinanceRecord[]     @relation("CreatedByUserOnSession")
+  approvedRecords FinanceRecord[]     @relation("ApprovedByUserOnSession")
+  uploadedFiles   FinanceAttachment[] @relation("UploadedByUserOnSession")
 }
+
 
 model School {
   id             String           @id @default(cuid())
@@ -76,7 +81,15 @@ model School {
   classes        Class[]
   exams          Exam[]
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  updatedAt      DateTime         @default(now())
+
+  inspectors      Inspector[]
+  libraries       Library[]
+  classReps       ClassRep[]
+  cleaningStaff   CleaningStaff[]
+  cookStaff       CookStaff[]
+  financeBudgets  FinanceBudget[]
+  financeInsights FinanceInsightCache[]
 }
 
 model UserSession {
@@ -88,7 +101,12 @@ model UserSession {
   school       SchoolSession @relation(fields: [schoolId], references: [id])
   sessions     Session[]    // JWT refresh tokens
   createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  updatedAt    DateTime     @default(now())
+
+  // Finance relations
+  createdRecords  FinanceRecord[] @relation("CreatedByUserOnSession")
+  approvedRecords FinanceRecord[] @relation("ApprovedByUserOnSession")
+  uploadedFiles   FinanceAttachment[] @relation("UploadedByUserOnSession")
 }
 
 model Session {
@@ -98,7 +116,7 @@ model Session {
   token        String      @unique
   expiresAt    DateTime
   createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  updatedAt    DateTime    @default(now())
 }
 
 ///////////////////////
@@ -110,6 +128,7 @@ model Student {
   firstName   String
   lastName    String
   class       String
+  classId     String?
   section     String?
   age         Int
   gender      String?
@@ -121,26 +140,28 @@ model Student {
   schoolId    String
   school      School   @relation(fields: [schoolId], references: [id])
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @default(now())
+  classRef    Class?   @relation("StudentToClass", fields: [classId], references: [id])
 
   @@index([schoolId])
 }
 
 model Teacher {
-  id          String    @id @default(cuid())
-  firstName   String
-  lastName    String
-  email       String    @unique
-  phone       String?
-  role        String    @default("TEACHER") // For RBAC: TEACHER, HEAD_TEACHER, etc.
-  subjects    String[]  // Array of subjects they teach
-  classes     String[]  // Array of class names/ids they handle
-  hireDate    DateTime  @default(now())
-  active      Boolean   @default(true)
-  schoolId    String
-  school      School    @relation(fields: [schoolId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String    @unique
+  phone         String?
+  role          String    @default("TEACHER")
+  subjects      String[]
+  classes       String[]
+  hireDate      DateTime  @default(now())
+  active        Boolean   @default(true)
+  schoolId      String
+  school        School    @relation(fields: [schoolId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now())
+  classesHandled Class[]  @relation("TeacherToClass")
 
   @@index([schoolId])
 }
@@ -150,12 +171,13 @@ model Class {
   name      String
   level     String
   teacherId String?
-  teacher   Teacher? @relation(fields: [teacherId], references: [id])
-  students  Student[]
+  teacher   Teacher? @relation("TeacherToClass", fields: [teacherId], references: [id])
+  students  Student[] @relation("StudentToClass")
   schoolId  String
   school    School   @relation(fields: [schoolId], references: [id])
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
+  exams     Exam[]
 
   @@index([schoolId])
 }
@@ -170,7 +192,7 @@ model Exam {
   schoolId    String
   school      School   @relation(fields: [schoolId], references: [id])
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @default(now())
 
   @@index([schoolId])
 }
@@ -180,42 +202,42 @@ model Exam {
 ///////////////////////
 
 model HR {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  phone        String?
-  position     String?
-  role         String?  // e.g., HR_MANAGER, HR_ASSISTANT
-  schoolId     String
-  school       School   @relation(fields: [schoolId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  position  String?
+  role      String?
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   @@index([schoolId])
 }
 
 model Auditor {
-  id         String   @id @default(cuid())
-  name       String
+  id        String   @id @default(cuid())
+  name      String
   department String
-  level      String
-  schoolId   String
-  school     School   @relation(fields: [schoolId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  level     String
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   @@index([schoolId])
 }
 
 model Inspector {
-  id         String   @id @default(cuid())
-  name       String
+  id        String   @id @default(cuid())
+  name      String
   department String
-  level      String
-  schoolId   String
-  school     School   @relation(fields: [schoolId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  level     String
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   @@index([schoolId])
 }
@@ -229,35 +251,35 @@ model Library {
   schoolId  String
   school    School   @relation(fields: [schoolId], references: [id])
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
 
   @@index([schoolId])
 }
 
 model ClassRep {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  phone      String?
-  classId    String
-  schoolId   String
-  school     School   @relation(fields: [schoolId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  classId   String
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   @@index([schoolId])
 }
 
 model CleaningStaff {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  phone      String?
-  shift      String   // e.g., Morning, Evening
-  schoolId   String
-  school     School   @relation(fields: [schoolId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  shift     String
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   @@index([schoolId])
 }
@@ -267,12 +289,12 @@ model CookStaff {
   name           String
   email          String   @unique
   phone          String?
-  shift          String   // Morning, Afternoon, Evening
-  specialization String?  // e.g., bakery, general, kitchen
+  shift          String
+  specialization String?
   schoolId       String
   school         School   @relation(fields: [schoolId], references: [id])
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime @default(now())
 
   @@index([schoolId])
 }
@@ -281,7 +303,6 @@ model CookStaff {
 // FINANCE MODULE
 ///////////////////////
 
-// Global enums for Finance
 enum FinanceType {
   INCOME
   EXPENSE
@@ -311,88 +332,89 @@ enum TransactionDirection {
   OUTFLOW
 }
 
-// FinanceRecord: primary ledger row
 model FinanceRecord {
-  id            String          @id @default(cuid())
+  id            String        @id @default(cuid())
   schoolId      String
-  school        School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  // creator (UserSession)
+  sessionId     String        // <--- link to SchoolSession
+  session       SchoolSession @relation("CreatedByUserOnSession", fields: [sessionId], references: [id])
+
   createdById   String
-  createdBy     UserSession     @relation(fields: [createdById], references: [id])
+  createdBy     UserSession   @relation("CreatedByUserOnSession", fields: [createdById], references: [id])
 
-  // core
+  approvedById  String?
+  approvedBy    UserSession?  @relation("ApprovedByUserOnSession", fields: [approvedById], references: [id])
+
   type          FinanceType
   category      FinanceCategory
-  amount        Decimal         @db.Decimal(10, 2)
+  amount        Decimal       @db.Decimal(10, 2)
   description   String?
-  date          DateTime        @default(now())
+  date          DateTime      @default(now())
 
-  // lifecycle & approvals
-  status        FinanceStatus   @default(PENDING)
-  approvedById  String?
-  approvedBy    UserSession?    @relation("ApprovedByUser", fields: [approvedById], references: [id])
-
-  // relations
   transactions  FinanceTransaction[]
   attachments   FinanceAttachment[]
 
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now())
+  approvedSessionId String?               // optional: only if the record is approved
+  approvedSession   SchoolSession?       @relation("ApprovedByUserOnSession", fields: [approvedSessionId], references: [id])
 
-  @@index([schoolId])
-  @@index([type, date])
 }
 
 model FinanceTransaction {
-  id            String          @id @default(cuid())
-  recordId      String
-  record        FinanceRecord   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  id        String        @id @default(cuid())
+  recordId  String
+  record    FinanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
 
-  amount        Decimal         @db.Decimal(10, 2)
-  direction     TransactionDirection
-  method        PaymentMethod
-  reference     String?         @unique
-  timestamp     DateTime        @default(now())
+  amount    Decimal       @db.Decimal(10, 2)
+  direction TransactionDirection
+  method    PaymentMethod
+  reference String?       @unique
+  timestamp DateTime      @default(now())
 
-  createdAt     DateTime        @default(now())
+  createdAt DateTime      @default(now())
 }
 
 model FinanceAttachment {
-  id            String          @id @default(cuid())
+  id            String        @id @default(cuid())
   recordId      String
-  record        FinanceRecord   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record        FinanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  sessionId     String
+  session       SchoolSession @relation("UploadedByUserOnSession", fields: [sessionId], references: [id])
+
+  uploadedById  String
+  uploadedBy    UserSession   @relation("UploadedByUserOnSession", fields: [uploadedById], references: [id])
 
   url           String
   filename      String
-  uploadedById  String
-  uploadedBy    UserSession     @relation(fields: [uploadedById], references: [id])
-  createdAt     DateTime        @default(now())
+  createdAt     DateTime      @default(now())
 }
 
+
 model FinanceBudget {
-  id            String          @id @default(cuid())
-  schoolId      String
-  school        School          @relation(fields: [schoolId], references: [id])
-  year          Int
-  category      FinanceCategory
-  allocated     Decimal         @db.Decimal(10, 2)
-  spent         Decimal         @db.Decimal(10, 2) @default(0)
-  remaining     Decimal         @db.Decimal(10, 2)
-  updatedAt     DateTime        @updatedAt
+  id        String          @id @default(cuid())
+  schoolId  String
+  school    School          @relation(fields: [schoolId], references: [id])
+  year      Int
+  category  FinanceCategory
+  allocated Decimal         @db.Decimal(10, 2)
+  spent     Decimal         @db.Decimal(10, 2) @default(0)
+  remaining Decimal         @db.Decimal(10, 2)
+  updatedAt DateTime        @default(now())
 
   @@unique([schoolId, year, category])
 }
 
-// Optional persistent cache of GPT insights (if you want DB-backed caching)
 model FinanceInsightCache {
-  id            String     @id @default(cuid())
-  schoolId      String
-  school        School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  data          Json
-  generatedAt   DateTime   @default(now())
-  expiresAt     DateTime
-  version       String     @default("v1")
+  id          String     @id @default(cuid())
+  schoolId    String
+  school      School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  data        Json
+  generatedAt DateTime   @default(now())
+  expiresAt   DateTime
+  version     String     @default("v1")
 
   @@index([schoolId, version])
 }
