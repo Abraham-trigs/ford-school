@@ -1,12 +1,18 @@
+// src/lib/prisma.ts
 import { PrismaClient } from "@prisma/client";
 
-// Ensure a single Prisma client instance across hot reloads
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+// Prevent multiple instances in development (Next.js hot reload)
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
 }
 
-// ✅ No middleware attached
+export const prisma =
+  globalThis.prisma ??
+  new PrismaClient({
+    log: ["query", "warn", "error"], // optional: useful in dev
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis.prisma = prisma;
+}

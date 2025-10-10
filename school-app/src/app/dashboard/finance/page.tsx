@@ -1,5 +1,5 @@
 // src/app/(dashboard)/finance/page.tsx
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../../../lib/prisma";
 import FinanceDashboard from "@/components/Finance/FinanceDashbaord"; // client component
 import { getUserFromCookie } from "@/lib/auth/cookies";
 

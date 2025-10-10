@@ -1,5 +1,5 @@
 // src/app/api/class-reps/route.ts
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../../../lib/prisma";
 import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";

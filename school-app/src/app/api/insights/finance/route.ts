@@ -1,6 +1,6 @@
 // src/app/api/insights/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../../../../lib/prisma";
 import { getUserFromCookie } from "@/lib/auth/cookies";
 import { z } from "zod";
 import { getCache, setCache, financeCacheKey } from "@/lib/redis";
