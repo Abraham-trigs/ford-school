@@ -158,9 +158,9 @@ model Auditor {
   @@index([schoolId])
 }
 
-///////////////////////
+//////////////////////
 // STAFF MODELS
-///////////////////////
+//////////////////////
 
 model HR {
   id        String   @id @default(cuid())

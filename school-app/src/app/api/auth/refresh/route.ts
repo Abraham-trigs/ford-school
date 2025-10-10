@@ -1,13 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
-import { verifyRefreshToken } from "@/features/auth/auth.service";
+// src/app/api/auth/refresh/route.ts
+import { NextResponse } from "next/server";
+import {
+  getUserFromCookie,
+  createAndSetRefreshToken,
+  clearRefreshCookie,
+} from "@/lib/auth/cookies";
 
-export async function GET(req: NextRequest) {
-  const token = req.cookies.get("refreshToken")?.value;
-  if (!token) return NextResponse.json({ message: "No refresh token" }, { status: 401 });
+export async function GET() {
+  const user = await getUserFromCookie();
 
-  const decoded = verifyRefreshToken(token);
-  if (!decoded) return NextResponse.json({ message: "Invalid token" }, { status: 401 });
+  if (!user) {
+    // Invalid or missing token → clear cookie
+    clearRefreshCookie();
+    return NextResponse.json(
+      { message: "No or invalid refresh token" },
+      { status: 401 }
+    );
+  }
 
-  // Optionally generate new access token here
-  return NextResponse.json({ id: decoded.id });
+  // Valid token → generate a new refresh token
+  const newToken = createAndSetRefreshToken(user);
+
+  return NextResponse.json({
+    message: "Token refreshed",
+    refreshToken: newToken,
+    user,
+  });
 }

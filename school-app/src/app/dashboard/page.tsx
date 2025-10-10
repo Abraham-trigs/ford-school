@@ -7,7 +7,10 @@ interface PageProps {
   allowedRoles: string[];
 }
 
-export default function DashboardSection({ title, allowedRoles }: PageProps) {
+export default function DashboardSection({
+  title,
+  allowedRoles = [],
+}: PageProps) {
   const user = useRoleGuard(allowedRoles);
 
   if (!user) return <p>Loading...</p>;

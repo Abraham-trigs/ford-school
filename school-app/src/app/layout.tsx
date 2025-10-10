@@ -1,20 +1,23 @@
+// /app/layout.tsx
 import "./globals.css";
 import { ReactNode } from "react";
-import { useUserStore } from "@/store/userStore";
 import { getUserFromCookie } from "@/lib/auth/cookies";
+import ClientWrapper from "@/components/common/ClientWrapper";
 
 export default async function RootLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const cookieUser = await getUserFromCookie();
-
-  useUserStore.getState().setUserFromCookie(cookieUser);
+  // Server-side: get user from cookie
+  const user = await getUserFromCookie();
 
   return (
     <html lang="en">
-      <body className="bg-background text-muted font-sans">{children}</body>
+      <body>
+        {/* Wrap children with ClientWrapper to populate Zustand store */}
+        <ClientWrapper user={user}>{children}</ClientWrapper>
+      </body>
     </html>
   );
 }
