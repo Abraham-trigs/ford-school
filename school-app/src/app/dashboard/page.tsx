@@ -16,9 +16,9 @@ export default function DashboardSection({ title, allowedRoles }: PageProps) {
     <div className="p-6 bg-background min-h-full rounded-lg shadow">
       <h1 className="text-2xl font-semibold text-primary mb-4">{title}</h1>
       <p className="text-lightGray">
-        Accessible roles: {allowedRoles.join(", ")}. Current role: {user.role}
+        Accessible roles: {allowedRoles.join(", ")}. Current role:{" "}
+        {user?.role ?? "N/A"}
       </p>
-      {/* TODO: Add tables, forms, or charts specific to this section */}
     </div>
   );
 }

@@ -8,9 +8,9 @@ export function useRoleGuard(allowedRoles: string[]) {
 
   useEffect(() => {
     if (user && !allowedRoles.includes(user.role)) {
-      router.push("/dashboard"); // redirect if not allowed
+      router.push("/dashboard"); // redirect if role not allowed
     }
   }, [user, allowedRoles, router]);
 
-  return user;
+  return user; // may be null initially, handle in component
 }

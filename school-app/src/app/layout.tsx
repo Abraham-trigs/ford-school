@@ -1,23 +1,16 @@
-"use client";
-import { useEffect } from "react";
 import "./globals.css";
+import { ReactNode } from "react";
 import { useUserStore } from "@/store/userStore";
-import axios from "axios";
+import { getUserFromCookie } from "@/lib/auth/cookies";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
-  const setUser = useUserStore((state) => state.setUser);
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const cookieUser = await getUserFromCookie();
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await axios.get("/api/me", { withCredentials: true });
-        setUser(res.data);
-      } catch {
-        setUser(null);
-      }
-    };
-    fetchUser();
-  }, [setUser]);
+  useUserStore.getState().setUserFromCookie(cookieUser);
 
   return (
     <html lang="en">
