@@ -14,12 +14,17 @@
 /out/
 
 
+# Ignore local auth overrides or test schemas
+src/features/auth/loginSchema.local.ts
+
+
 # production
 /build
 superadmin.service.ts
 
 #environement files
 .env 
+auth.validator.ts
 
 #personal files
 STEPS.md

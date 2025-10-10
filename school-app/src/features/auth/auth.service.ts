@@ -4,35 +4,45 @@ import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const REFRESH_SECRET = process.env.REFRESH_SECRET!;
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET!;
 const ACCESS_EXPIRES_IN = "15m";
 const REFRESH_EXPIRES_IN = "7d";
 
-export const loginUser = async (email: string, password: string, schoolId: string) => {
-  const user = await prisma.user.findFirst({
-    where: { email, schoolId },
-    include: { school: true },
-  });
+// Runtime checks
+if (!ACCESS_TOKEN_SECRET) throw new Error("ACCESS_TOKEN_SECRET is not defined");
+if (!REFRESH_TOKEN_SECRET) throw new Error("REFRESH_TOKEN_SECRET is not defined");
+
+export const loginUser = async (email: string, password: string, schoolId?: string) => {
+  let user;
+
+  if (schoolId) {
+    // Look for a user with schoolId first
+    user = await prisma.userAccount.findFirst({
+      where: { email, schoolId },
+      include: { schoolAccount: true },
+    });
+  } else {
+    // If no schoolId, check if this is SUPER_ADMIN
+    user = await prisma.userAccount.findFirst({
+      where: { email, role: "SUPER_ADMIN" },
+    });
+  }
 
   if (!user) throw new Error("Invalid credentials");
 
-  const isValid = await bcrypt.compare(password, user.password);
+  const isValid = await bcrypt.compare(password, user.passwordHash);
   if (!isValid) throw new Error("Invalid credentials");
 
-  const accessToken = jwt.sign({ id: user.id, role: user.role, schoolId }, JWT_SECRET, {
-    expiresIn: ACCESS_EXPIRES_IN,
+  const accessToken = jwt.sign(
+    { id: user.id, role: user.role, schoolId: user.schoolId || null },
+    ACCESS_TOKEN_SECRET,
+    { expiresIn: ACCESS_EXPIRES_IN }
+  );
+
+  const refreshToken = jwt.sign({ id: user.id }, REFRESH_TOKEN_SECRET, {
+    expiresIn: REFRESH_EXPIRES_IN,
   });
 
-  const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
-
   return { user, accessToken, refreshToken };
-};
-
-export const verifyRefreshToken = (token: string) => {
-  try {
-    return jwt.verify(token, REFRESH_SECRET) as { id: string };
-  } catch {
-    return null;
-  }
 };

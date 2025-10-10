@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 
 async function main() {
   const email = process.env.SUPER_ADMIN_EMAIL || "superadmin@formless.com";
-  const password = process.env.SUPER_ADMIN_PASSWORD || "0243wethebestemailmarvellous!";
+  const password = process.env.SUPER_ADMIN_PASSWORD || "0243wethebestemailmarvellous";
 
   const existing = await prisma.userAccount.findUnique({ where: { email } });
   if (existing) {

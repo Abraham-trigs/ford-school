@@ -9,7 +9,7 @@ interface User {
   id: string;
   email: string;
   role: string;
-  school: School;
+  school?: School | null;
 }
 
 interface UserStore {

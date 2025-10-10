@@ -8,8 +8,8 @@ export default function Topbar() {
   if (!user) return null;
 
   return (
-    <header className="h-16 bg-deeper flex items-center justify-between px-6 text-lightGray shadow">
-      <span className="font-semibold">{user.school.name}</span>
+    <header className="h-16 bg-deepPurple flex items-center justify-between px-6 text-muted shadow">
+      <span className="font-semibold">{user.school?.name || "No School"}</span>
       <span>
         {user.email} ({user.role})
       </span>
