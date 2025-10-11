@@ -1,62 +1,65 @@
-import { PrismaClient } from "@prisma/client";
+// src/prisma/seed.ts
+import { PrismaClient, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log("🌱 Seeding single-school setup...");
 
-  // 1. Create Super Admin
-  const superAdminPassword = await bcrypt.hash("SuperAdmin@123", 10);
+  // Utility to hash passwords
+  const hashPassword = async (password: string) => bcrypt.hash(password, 10);
+
+  // 1. Super Admin
   const superAdmin = await prisma.user.upsert({
     where: { email: "superadmin@formless.com" },
     update: {},
     create: {
       email: "superadmin@formless.com",
       name: "System Super Admin",
-      password: superAdminPassword,
-      role: "SUPERADMIN",
+      password: await hashPassword("SuperAdmin@123"),
+      role: Role.SUPERADMIN,
     },
   });
 
-  // 2. Create a sample School
-  const school = await prisma.school.upsert({
-    where: { name: "Formless International" },
-    update: {},
-    create: {
-      name: "Formless International",
-      domain: "formless-school.com",
-    },
-  });
-
-  // 3. Create School Admin
-  const adminPassword = await bcrypt.hash("Admin@123", 10);
+  // 2. School Admin
   const schoolAdmin = await prisma.user.upsert({
-    where: { email: "admin@formless-school.com" },
+    where: { email: "admin@formless.com" },
     update: {},
     create: {
-      email: "admin@formless-school.com",
-      name: "Formless School Admin",
-      password: adminPassword,
-      role: "ADMIN",
-      schoolId: school.id,
+      email: "admin@formless.com",
+      name: "School Admin",
+      password: await hashPassword("Admin@123"),
+      role: Role.ADMIN,
     },
   });
 
-  console.log({
-    superAdmin,
-    school,
-    schoolAdmin,
+  // 3. Teacher
+  const teacher = await prisma.user.upsert({
+    where: { email: "teacher@formless.com" },
+    update: {},
+    create: {
+      email: "teacher@formless.com",
+      name: "Mr. Newton",
+      password: await hashPassword("Teacher@123"),
+      role: Role.TEACHER,
+    },
   });
+
+  console.table([
+    { role: "SUPERADMIN", email: superAdmin.email },
+    { role: "ADMIN", email: schoolAdmin.email },
+    { role: "TEACHER", email: teacher.email },
+  ]);
+
+  console.log("✅ Seeding complete.");
 }
 
 main()
-  .then(async () => {
-    console.log("✅ Database seeding completed.");
-    await prisma.$disconnect();
-  })
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
+  .catch(async (error) => {
+    console.error("❌ Seed failed:", error);
     process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });

@@ -1,35 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { loginSchema } from "@/features/auth/auth.validator";
-import { loginUser } from "@/features/auth/auth.service";
-import { attachAuthCookies } from "@/lib/auth/cookies";
+import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+import { rotateTokens, clearAuthCookies } from "@/lib/auth/cookies";
 
-// Handles POST /api/auth/login
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const parsed = loginSchema.parse(body);
+    const { email, password } = await req.json();
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+    }
 
-    // Authenticate user against DB (Prisma logic inside loginUser)
-    const { user } = await loginUser(parsed.email, parsed.password, parsed.schoolId);
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
 
-    const res = NextResponse.json({
-      message: "Login successful",
-      user,
-    });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
 
-    // Attach access + refresh cookies
-    attachAuthCookies(res, {
+    const payload = {
       userId: user.id,
       role: user.role,
       schoolId: user.schoolId,
-    });
+    };
 
-    return res;
-  } catch (err: any) {
-    console.error("Login error:", err);
-    return NextResponse.json(
-      { message: err.message || "Login failed" },
-      { status: 400 }
-    );
+    // Rotate and set cookies
+    const { accessToken, refreshToken } = await rotateTokens(payload);
+
+    return NextResponse.json({
+      message: "Login successful",
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email, role: user.role },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    clearAuthCookies();
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

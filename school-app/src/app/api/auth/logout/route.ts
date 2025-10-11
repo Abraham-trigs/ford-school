@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 
-// Handles POST /api/auth/logout
 export async function POST() {
-  const res = NextResponse.json({ message: "Logged out successfully" });
-  clearAuthCookies(res);
-  return res;
+  try {
+    clearAuthCookies();
+    return NextResponse.json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Logout error:", error);
+    return NextResponse.json({ error: "Failed to logout" }, { status: 500 });
+  }
 }
