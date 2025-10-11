@@ -21,7 +21,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.cookStaff,
     schema: cookStaffSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL"],
+    allowedRoles: [ "SUPER_ADMIN", "ADMIN", "PRINCIPAL"],
     resourceName: "Cook Staff",
   })(req as any, user);
 };

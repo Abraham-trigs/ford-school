@@ -19,7 +19,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.inspector,
     schema: inspectorSchema,
-    allowedRoles: ["ADMIN", "INSPECTOR"],
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "INSPECTOR"],
     resourceName: "Inspector",
   })(req as any, user);
 };

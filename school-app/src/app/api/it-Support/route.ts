@@ -21,7 +21,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.itSupport, // Make sure your Prisma model is named itSupport
     schema: itSupportSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "IT_SUPPORT"], // match your role enum
+    allowedRoles: [ "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "IT_SUPPORT"], // match your role enum
     resourceName: "IT Support",
   })(req as any, user);
 };

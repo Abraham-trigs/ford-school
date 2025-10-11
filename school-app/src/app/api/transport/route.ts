@@ -22,7 +22,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.transport,
     schema: transportSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "TRANSPORT"],
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "TRANSPORT"],
     resourceName: "Transport",
   })(req as any, user);
 };

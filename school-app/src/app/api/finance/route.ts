@@ -32,7 +32,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.financeRecord,
     schema: financeRecordSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "FINANCE"],
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "FINANCE"],
     resourceName: "Finance Record",
     onBeforeCreate: async (data, user) => ({
       ...data,

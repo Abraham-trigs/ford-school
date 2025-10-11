@@ -9,7 +9,7 @@ export const teacherSchema = z.object({
   lastName: z.string(),
   email: z.string().email(),
   phone: z.string().optional(),
-  role: z.enum(["TEACHER", "HEAD_TEACHER", "ADMIN"]).optional(),
+  role: z.enum(["SUPER_ADMIN", "TEACHER", "HEAD_TEACHER", "ADMIN"]).optional(),
   subjects: z.array(z.string()),
   classes: z.array(z.string()),
   active: z.boolean().optional(),
@@ -22,7 +22,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.teacher,
     schema: teacherSchema,
-    allowedRoles: ["ADMIN", "HEAD_TEACHER", "TEACHER"],
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "HEAD_TEACHER", "TEACHER"],
     resourceName: "Teacher",
   })(req as any, user);
 };

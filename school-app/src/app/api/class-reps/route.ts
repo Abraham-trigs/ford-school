@@ -1,5 +1,5 @@
 // src/app/api/class-reps/route.ts
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../../../prisma/prisma";
 import { z } from "zod";
 import { createCRUDHandler } from "@/features/api/crudServices";
 import { getUserFromCookie } from "@/lib/auth/cookies";
@@ -20,7 +20,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.classRep,
     schema: classRepSchema,
-    allowedRoles: ["ADMIN", "TEACHER"],
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "TEACHER"],
     resourceName: "Class Rep",
   })(req as any, user);
 };

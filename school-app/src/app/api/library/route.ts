@@ -20,7 +20,7 @@ export const GET = async (req: Request) => {
   return createCRUDHandler({
     model: prisma.library,
     schema: librarySchema,
-    allowedRoles: ["ADMIN", "LIBRARY"],
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "LIBRARY"],
     resourceName: "Library",
   })(req as any, user);
 };

@@ -19,8 +19,8 @@ export const GET = async (req: Request) => {
 
   return createCRUDHandler({
     model: prisma.exam,
-    schema: examSchema,
-    allowedRoles: ["ADMIN", "PRINCIPAL", "TEACHER"],
+    schema: examSchema,Walletss
+    allowedRoles: [ "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "TEACHER"],
     resourceName: "Exam",
   })(req as any, user);
 };

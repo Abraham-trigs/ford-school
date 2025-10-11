@@ -25,7 +25,7 @@ export default function SuperadminDashboardClient() {
   const [schoolToEdit, setSchoolToEdit] = useState<School | null>(null);
   const [schoolToDelete, setSchoolToDelete] = useState<School | null>(null);
 
-  // Fetch schools
+  // Fetch schools when component mounts
   useEffect(() => {
     fetchSchools();
   }, []);
@@ -81,6 +81,7 @@ export default function SuperadminDashboardClient() {
     { key: "address", label: "Address" },
   ];
 
+  // Show nothing if user is not loaded yet
   if (!user) return <LoaderModal isVisible={true} text="Loading user..." />;
 
   return (
@@ -108,6 +109,7 @@ export default function SuperadminDashboardClient() {
         )}
       />
 
+      {/* CRUD Modal */}
       <CrudModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -116,6 +118,7 @@ export default function SuperadminDashboardClient() {
         {/* School form component goes here */}
       </CrudModal>
 
+      {/* Delete Modal */}
       <DeleteModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
@@ -123,6 +126,7 @@ export default function SuperadminDashboardClient() {
         message={`Delete "${schoolToDelete?.name}"?`}
       />
 
+      {/* Loader */}
       <LoaderModal isVisible={loading} text="Processing..." />
     </div>
   );
