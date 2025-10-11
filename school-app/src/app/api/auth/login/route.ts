@@ -1,29 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loginSchema } from "@/features/auth/auth.validator";
 import { loginUser } from "@/features/auth/auth.service";
+import { attachAuthCookies } from "@/lib/auth/cookies";
 
+// Handles POST /api/auth/login
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = loginSchema.parse(body);
 
-    const { user, accessToken, refreshToken } = await loginUser(
-      parsed.email,
-      parsed.password,
-      parsed.schoolId
-    );
+    // Authenticate user against DB (Prisma logic inside loginUser)
+    const { user } = await loginUser(parsed.email, parsed.password, parsed.schoolId);
 
-    const res = NextResponse.json({ user });
-    res.cookies.set("refreshToken", refreshToken, {
-      httpOnly: true,
-      path: "/",
-      sameSite: "strict",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+    const res = NextResponse.json({
+      message: "Login successful",
+      user,
+    });
+
+    // Attach access + refresh cookies
+    attachAuthCookies(res, {
+      userId: user.id,
+      role: user.role,
+      schoolId: user.schoolId,
     });
 
     return res;
   } catch (err: any) {
-    return NextResponse.json({ message: err.message || "Login failed" }, { status: 400 });
+    console.error("Login error:", err);
+    return NextResponse.json(
+      { message: err.message || "Login failed" },
+      { status: 400 }
+    );
   }
 }

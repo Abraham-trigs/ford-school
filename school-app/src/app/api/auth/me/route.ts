@@ -1,36 +1,30 @@
-import { NextRequest, NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import { NextResponse } from "next/server";
+import { getUserFromCookie } from "@/lib/auth/cookies";
 import { prisma } from "@/lib/prisma";
 
-const ACCESS_TOKEN_SECR = process.env.ACCESS_TOKEN_SECR!;
+// Handles GET /api/me – returns current authenticated user
+export async function GET() {
+  const payload = await getUserFromCookie();
 
-export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json(null, { status: 401 });
+  if (!payload) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const token = authHeader.split(" ")[1];
+  const user = await prisma.userAccount.findUnique({
+    where: { id: payload.userId },
+    include: { schoolAccount: true },
+  });
 
-  try {
-    const decoded = jwt.verify(token, ACCESS_TOKEN_SECR) as {
-      id: string;
-      role: string;
-      schoolId?: string | null;
-    };
-
-    // Fetch user from UserAccount
-    const user = await prisma.userAccount.findUnique({
-      where: { id: decoded.id },
-      include: { 
-        schoolAccount: true, // include school relation if exists
-      },
-    });
-
-    if (!user) return NextResponse.json(null, { status: 401 });
-
-    return NextResponse.json(user);
-  } catch (err) {
-    return NextResponse.json(null, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ message: "User not found" }, { status: 404 });
   }
+
+  return NextResponse.json({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    school: user.schoolAccount
+      ? { id: user.schoolAccount.id, name: user.schoolAccount.name }
+      : null,
+  });
 }

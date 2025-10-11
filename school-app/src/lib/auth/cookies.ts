@@ -1,7 +1,8 @@
 import { serialize, parse } from "cookie";
 import { NextApiRequest, NextApiResponse } from "next";
 
-const COOKIE_NAME = "formless_refresh_token";
+const ACCESS_COOKIE = "access_token";
+const REFRESH_COOKIE = "formless_refresh_token";
 
 export function setRefreshCookie(res: NextApiResponse, token: string) {
   res.setHeader("Set-Cookie", serialize(COOKIE_NAME, token, {

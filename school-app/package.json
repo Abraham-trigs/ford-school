@@ -63,6 +63,6 @@
     "typescript": "^5"
   },
   "prisma": {
-    "seed": "ts-node prisma/seedSuperAdmin.ts"
+    "seed": "ts-node prisma/seed.ts"
   }
 }
