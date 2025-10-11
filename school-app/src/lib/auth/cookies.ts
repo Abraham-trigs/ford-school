@@ -1,60 +1,77 @@
 import { cookies } from "next/headers";
-import { serialize } from "cookie";
-import { signRefreshToken, verifyRefreshToken, JWTPayload } from "./jwt";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+  JWTPayload,
+} from "./jwt";
 
-const COOKIE_NAME = "formless_refresh_token";
+const ACCESS_COOKIE = "access_token";
+const REFRESH_COOKIE = "formless_refresh_token";
 
-// ------------------------
-// Get user from cookie
-// ------------------------
+// -----------------------------------------------------------------------------
+// Read access token → returns decoded user payload or null
+// -----------------------------------------------------------------------------
 export async function getUserFromCookie(): Promise<JWTPayload | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-
+  const token = cookies().get(ACCESS_COOKIE)?.value;
   if (!token) return null;
-
   try {
-    const user = verifyRefreshToken(token); // returns { userId, role, schoolId }
-    return user;
-  } catch (err) {
-    console.error("Invalid JWT:", err);
+    return verifyAccessToken(token);
+  } catch {
     return null;
   }
 }
 
-// ------------------------
-// Set refresh cookie
-// ------------------------
-export function setRefreshCookie(token: string) {
+// -----------------------------------------------------------------------------
+// Attach BOTH cookies (access + refresh) to NextResponse
+// -----------------------------------------------------------------------------
+export function attachAuthCookies(res: Response | any, user: JWTPayload) {
   const cookieStore = cookies();
-  cookieStore.set(COOKIE_NAME, token, {
+  const access = signAccessToken(user);
+  const refresh = signRefreshToken(user);
+
+  // Access: short-lived (15 min)
+  cookieStore.set(ACCESS_COOKIE, access, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    maxAge: 15 * 60,
   });
-}
 
-// ------------------------
-// Clear refresh cookie
-// ------------------------
-export function clearRefreshCookie() {
-  const cookieStore = cookies();
-  cookieStore.set(COOKIE_NAME, "", {
+  // Refresh: long-lived (7 days)
+  cookieStore.set(REFRESH_COOKIE, refresh, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 0,
+    maxAge: 7 * 24 * 60 * 60,
   });
+
+  return res;
 }
 
-// ------------------------
-// Helper: create and set new refresh token
-// ------------------------
-export function createAndSetRefreshToken(user: JWTPayload) {
-  const token = signRefreshToken(user);
-  setRefreshCookie(token);
-  return token;
+// -----------------------------------------------------------------------------
+// Clear both cookies on logout / invalidation
+// -----------------------------------------------------------------------------
+export function clearAuthCookies(res: Response | any) {
+  const cookieStore = cookies();
+  [ACCESS_COOKIE, REFRESH_COOKIE].forEach((name) =>
+    cookieStore.set(name, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    })
+  );
+  return res;
+}
+
+// -----------------------------------------------------------------------------
+// Rotate tokens – for refresh route or middleware auto-renewal
+// -----------------------------------------------------------------------------
+export function rotateTokens(res: Response | any, user: JWTPayload) {
+  return attachAuthCookies(res, user);
 }
