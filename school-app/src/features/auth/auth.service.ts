@@ -9,9 +9,10 @@ const REFRESH_SECRET = process.env.REFRESH_SECRET!;
 const ACCESS_EXPIRES_IN = "15m";
 const REFRESH_EXPIRES_IN = "7d";
 
-export const loginUser = async (email: string, password: string, schoolId: string) => {
+export const loginUser = async (email: string, password: string) => {
+  // Lookup by email only; school is inferred from user relationship
   const user = await prisma.user.findFirst({
-    where: { email, schoolId },
+    where: { email },
     include: { school: true },
   });
 
@@ -20,7 +21,7 @@ export const loginUser = async (email: string, password: string, schoolId: strin
   const isValid = await bcrypt.compare(password, user.password);
   if (!isValid) throw new Error("Invalid credentials");
 
-  const accessToken = jwt.sign({ id: user.id, role: user.role, schoolId }, JWT_SECRET, {
+  const accessToken = jwt.sign({ id: user.id, role: user.role, schoolId: user.schoolId }, JWT_SECRET, {
     expiresIn: ACCESS_EXPIRES_IN,
   });
 

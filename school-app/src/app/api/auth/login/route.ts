@@ -9,8 +9,7 @@ export async function POST(req: NextRequest) {
 
     const { user, accessToken, refreshToken } = await loginUser(
       parsed.email,
-      parsed.password,
-      parsed.schoolId
+      parsed.password
     );
 
     const res = NextResponse.json({ user });

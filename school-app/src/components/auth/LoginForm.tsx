@@ -12,7 +12,7 @@ export default function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [schoolId, setSchoolId] = useState(""); // can be dropdown if multiple schools
+  // School selection removed; login is email + password only
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,8 +24,8 @@ export default function LoginForm() {
     try {
       const res = await axios.post(
         "/api/auth/login",
-        { email, password, schoolId },
-        { withCredentials: true } // important to store the refresh token cookie
+        { email, password },
+        { withCredentials: true }
       );
 
       // Set user in Zustand store
@@ -77,14 +77,7 @@ export default function LoginForm() {
         required
       />
 
-      <label className="block mb-2 text-muted">School ID</label>
-      <input
-        type="text"
-        className="w-full p-3 mb-6 rounded bg-background border border-muted focus:outline-none focus:ring-2 focus:ring-secondary text-white"
-        value={schoolId}
-        onChange={(e) => setSchoolId(e.target.value)}
-        required
-      />
+      {/* School ID input removed */}
 
       <button
         type="submit"
