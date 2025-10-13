@@ -56,8 +56,7 @@ model User {
   role        Role     @default(STUDENT)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  school      School?  @relation(fields: [schoolId], references: [id])
-  schoolId    String?
+
 
 
 }
