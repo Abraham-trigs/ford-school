@@ -17,7 +17,7 @@ export default function HomePage() {
         <div className="flex flex-col gap-4">
           {/* SuperAdmin Login */}
           <button
-            onClick={() => router.push("/login")}
+            onClick={() => router.push("/auth")}
             className=" hover:bg-accentPurple bg-deeper w-full px-6 py-3  text-lightGray rounded-lg font-semibold  transition-colors duration-300"
           >
             Login

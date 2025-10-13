@@ -1,13 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyRefreshToken } from "@/features/auth/auth.service";
+import {
+  verifyRefreshToken,
+  signAccessToken,
+  rotateRefreshToken,
+} from "@/lib/auth/jwt";
 
 export async function GET(req: NextRequest) {
   const token = req.cookies.get("refreshToken")?.value;
-  if (!token) return NextResponse.json({ message: "No refresh token" }, { status: 401 });
+  if (!token) {
+    return NextResponse.json({ message: "No refresh token" }, { status: 401 });
+  }
 
-  const decoded = verifyRefreshToken(token);
-  if (!decoded) return NextResponse.json({ message: "Invalid token" }, { status: 401 });
+  try {
+    const decoded = verifyRefreshToken(token);
 
-  // Optionally generate new access token here
-  return NextResponse.json({ id: decoded.id });
+    // Issue new access token
+    const newAccessToken = signAccessToken({
+      userId: decoded.userId,
+      role: decoded.role,
+    });
+
+    // Rotate refresh token
+    const newRefreshToken = rotateRefreshToken(token);
+
+    const res = NextResponse.json({
+      accessToken: newAccessToken,
+      userId: decoded.userId,
+    });
+
+    res.cookies.set("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      path: "/",
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    return res;
+  } catch {
+    return NextResponse.json(
+      { message: "Invalid or expired refresh token" },
+      { status: 401 }
+    );
+  }
 }

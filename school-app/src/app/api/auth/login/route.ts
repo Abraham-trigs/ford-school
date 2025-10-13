@@ -7,13 +7,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = loginSchema.parse(body);
 
+    // only email and password now
     const { user, accessToken, refreshToken } = await loginUser(
       parsed.email,
-      parsed.password,
-      parsed.schoolId
+      parsed.password
     );
 
-    const res = NextResponse.json({ user });
+    const res = NextResponse.json({ user, accessToken });
+
     res.cookies.set("refreshToken", refreshToken, {
       httpOnly: true,
       path: "/",
@@ -24,6 +25,10 @@ export async function POST(req: NextRequest) {
 
     return res;
   } catch (err: any) {
-    return NextResponse.json({ message: err.message || "Login failed" }, { status: 400 });
+    console.error("LOGIN ERROR:", err);
+    return NextResponse.json(
+      { message: err.message || "Login failed" },
+      { status: 400 }
+    );
   }
 }

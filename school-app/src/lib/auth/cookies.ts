@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { serialize } from "cookie";
 import { signRefreshToken, verifyRefreshToken, JWTPayload } from "./jwt";
 
 const COOKIE_NAME = "formless_refresh_token";
@@ -14,7 +13,8 @@ export async function getUserFromCookie(): Promise<JWTPayload | null> {
   if (!token) return null;
 
   try {
-    const user = verifyRefreshToken(token); // returns { userId, role, schoolId }
+    // Returns { userId, role }
+    const user = verifyRefreshToken(token);
     return user;
   } catch (err) {
     console.error("Invalid JWT:", err);

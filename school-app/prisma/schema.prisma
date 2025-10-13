@@ -1,5 +1,3 @@
-// schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +5,16 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     // no default
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum Role {
@@ -22,7 +30,6 @@ enum Role {
   EXAM_OFFICER
   FINANCE
   HR
-  RECEPTIONIST
   IT_SUPPORT
   TRANSPORT
   NURSE
@@ -37,47 +44,4 @@ enum Role {
   AUDITOR
   INSPECTOR
   GUEST
-}
-
-model SchoolSession {
-  id          String        @id @default(cuid())
-  name        String
-  domain      String?       // optional subdomain for multi-tenant routing
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  users       UserSession[] // one-to-many: users in this school
-}
-
-model UserSession {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  passwordHash String
-  role         Role
-  schoolId     String
-  school       SchoolSession @relation(fields: [schoolId], references: [id])
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  sessions     Session[]    // JWT refresh tokens
-}
-
-model Session {
-  id           String      @id @default(cuid())
-  userId       String
-  user         UserSession @relation(fields: [userId], references: [id])
-  token        String      @unique
-  expiresAt    DateTime
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-}
-
-model Exam {
-  id        String   @id @default(cuid())
-  name      String
-  class     String
-  date      DateTime
-  subject   String
-  createdBy String   // userId
-  schoolId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }

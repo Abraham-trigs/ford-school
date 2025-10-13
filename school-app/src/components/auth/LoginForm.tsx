@@ -12,7 +12,6 @@ export default function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [schoolId, setSchoolId] = useState(""); // can be dropdown if multiple schools
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,14 +23,14 @@ export default function LoginForm() {
     try {
       const res = await axios.post(
         "/api/auth/login",
-        { email, password, schoolId },
-        { withCredentials: true } // important to store the refresh token cookie
+        { email, password }, // removed schoolId
+        { withCredentials: true } // keeps refresh token cookie
       );
 
-      // Set user in Zustand store
+      // store user in Zustand
       setUser(res.data.user);
 
-      // Redirect based on role (you can customize paths per role)
+      // simple role-based redirect
       const role = res.data.user.role;
       if (role === "ADMIN" || role === "PRINCIPAL") {
         router.push("/dashboard/admin");
@@ -71,18 +70,9 @@ export default function LoginForm() {
       <label className="block mb-2 text-muted">Password</label>
       <input
         type="password"
-        className="w-full p-3 mb-4 rounded bg-background border border-muted focus:outline-none focus:ring-2 focus:ring-primary text-white"
+        className="w-full p-3 mb-6 rounded bg-background border border-muted focus:outline-none focus:ring-2 focus:ring-primary text-white"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        required
-      />
-
-      <label className="block mb-2 text-muted">School ID</label>
-      <input
-        type="text"
-        className="w-full p-3 mb-6 rounded bg-background border border-muted focus:outline-none focus:ring-2 focus:ring-secondary text-white"
-        value={schoolId}
-        onChange={(e) => setSchoolId(e.target.value)}
         required
       />
 

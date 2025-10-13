@@ -7,11 +7,12 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET!;
 const ACCESS_TOKEN_EXP = "15m"; // 15 minutes
 const REFRESH_TOKEN_EXP = "7d"; // 7 days
 
-// Payload interface
+
+
+// Payload interface — simplified
 export interface JWTPayload {
   userId: string;
   role: string;
-  schoolId: string;
 }
 
 // ------------------------
@@ -38,7 +39,7 @@ export function signRefreshToken(payload: JWTPayload) {
 export function verifyAccessToken(token: string): JWTPayload {
   try {
     return jwt.verify(token, ACCESS_TOKEN_SECRET) as JWTPayload;
-  } catch (err) {
+  } catch {
     throw new Error("Invalid access token");
   }
 }
@@ -49,7 +50,7 @@ export function verifyAccessToken(token: string): JWTPayload {
 export function verifyRefreshToken(token: string): JWTPayload {
   try {
     return jwt.verify(token, REFRESH_TOKEN_SECRET) as JWTPayload;
-  } catch (err) {
+  } catch {
     throw new Error("Invalid refresh token");
   }
 }
