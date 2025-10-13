@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
-import { rotateTokens, clearAuthCookies } from "@/lib/auth/cookies";
+import { NextRequest, NextResponse } from "next/server";
+import { loginSchema } from "@/features/auth/auth.validator";
+import { loginUser } from "@/features/auth/auth.service";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = loginSchema.parse(body);

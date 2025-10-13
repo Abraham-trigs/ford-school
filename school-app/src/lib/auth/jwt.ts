@@ -7,8 +7,6 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET!;
 const ACCESS_TOKEN_EXP = "15m"; // 15 minutes
 const REFRESH_TOKEN_EXP = "7d"; // 7 days
 
-
-
 // Payload interface — simplified
 export interface JWTPayload {
   userId: string;
@@ -24,8 +22,13 @@ export function signAccessToken(payload: JWTPayload) {
   });
 }
 
-export function signRefreshToken(payload: object) {
-  return jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES });
+// ------------------------
+// SIGN REFRESH TOKEN
+// ------------------------
+export function signRefreshToken(payload: JWTPayload) {
+  return jwt.sign(payload, REFRESH_TOKEN_SECRET, {
+    expiresIn: REFRESH_TOKEN_EXP,
+  });
 }
 
 // ------------------------

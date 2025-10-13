@@ -1,29 +1,44 @@
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash('SuperSecurePassword123!', 10);
+  console.log("🌱 Seeding initial users...");
 
-  // Upsert super admin
-  await prisma.user.upsert({
-    where: { email: 'superadmin@formless.app' },
-    update: {}, // no update needed if exists
+  const password = await bcrypt.hash("password123", 10);
+
+  // 1️⃣ Super Admin (platform-level)
+  const superAdmin = await prisma.user.upsert({
+    where: { email: "superadmin@formless.app" },
+    update: {},
     create: {
-      name: 'Super Admin',
-      email: 'superadmin@formless.app',
-      password: passwordHash,
-      role: 'SUPER_ADMIN', // must match enum exactly
+      name: "Super Admin",
+      email: "superadmin@formless.app",
+      password,
+      role: "SUPER_ADMIN",
     },
   });
 
-  console.log('🌱 Super Admin seeded successfully');
+  // 2️⃣ Admin (school-level)
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@formless.app" },
+    update: {},
+    create: {
+      name: "Admin User",
+      email: "admin@formless.app",
+      password,
+      role: "ADMIN",
+    },
+  });
+
+  console.log("✅ Seed complete!");
+  console.log({ superAdmin, admin });
 }
 
 main()
-  .catch(async (error) => {
-    console.error("❌ Seed failed:", error);
+  .catch((e) => {
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {

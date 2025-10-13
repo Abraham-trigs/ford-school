@@ -1,16 +1,15 @@
-"use server";
-
 import { cookies } from "next/headers";
 import { signRefreshToken, verifyRefreshToken, JWTPayload } from "./jwt";
 
 const COOKIE_NAME = "formless_refresh_token";
 
 // ------------------------
-// Get user from access token (for SSR + middleware)
+// Get user from cookie
 // ------------------------
 export async function getUserFromCookie(): Promise<JWTPayload | null> {
   const cookieStore = cookies();
-  const token = cookieStore.get(ACCESS_COOKIE)?.value;
+  const token = cookieStore.get(COOKIE_NAME)?.value;
+
   if (!token) return null;
 
   try {
@@ -18,31 +17,17 @@ export async function getUserFromCookie(): Promise<JWTPayload | null> {
     const user = verifyRefreshToken(token);
     return user;
   } catch (err) {
-    console.error("❌ Invalid or expired access token:", err);
+    console.error("Invalid JWT:", err);
     return null;
   }
 }
 
 // ------------------------
-// Set access token cookie (short-lived, 15m)
+// Set refresh cookie
 // ------------------------
-export async function setAccessCookie(token: string) {
+export function setRefreshCookie(token: string) {
   const cookieStore = cookies();
-  cookieStore.set(ACCESS_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 15 * 60, // 15 minutes
-  });
-}
-
-// ------------------------
-// Set refresh token cookie (long-lived, 7 days)
-// ------------------------
-export async function setRefreshCookie(token: string) {
-  const cookieStore = cookies();
-  cookieStore.set(REFRESH_COOKIE, token, {
+  cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -52,45 +37,24 @@ export async function setRefreshCookie(token: string) {
 }
 
 // ------------------------
-// Clear both cookies (logout)
+// Clear refresh cookie
 // ------------------------
-export async function clearAuthCookies() {
+export function clearRefreshCookie() {
   const cookieStore = cookies();
-  [ACCESS_COOKIE, REFRESH_COOKIE].forEach((name) => {
-    cookieStore.set(name, "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
+  cookieStore.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
   });
 }
 
 // ------------------------
-// Verify refresh token and issue new tokens
+// Helper: create and set new refresh token
 // ------------------------
-export async function rotateTokens(user: JWTPayload) {
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
-  await setAccessCookie(accessToken);
-  await setRefreshCookie(refreshToken);
-  return { accessToken, refreshToken };
-}
-
-// ------------------------
-// Validate and return user from refresh cookie
-// ------------------------
-export async function getUserFromRefresh(): Promise<JWTPayload | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(REFRESH_COOKIE)?.value;
-  if (!token) return null;
-
-  try {
-    const user = verifyRefreshToken(token) as JWTPayload;
-    return user;
-  } catch (err) {
-    console.error("❌ Invalid or expired refresh token:", err);
-    return null;
-  }
+export function createAndSetRefreshToken(user: JWTPayload) {
+  const token = signRefreshToken(user);
+  setRefreshCookie(token);
+  return token;
 }

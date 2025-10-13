@@ -9,29 +9,17 @@ datasource db {
 }
 
 
-model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  password    String
-  name        String
-  role        Role     @default(USER)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     // no default
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
 
+// ==========================================
+// Role Enum — defines all user roles clearly
+// ==========================================
 enum Role {
-  SUPERADMIN
+  SUPER_ADMIN
   ADMIN
+  MODERATOR
+  PRINCIPAL
+  VICE_PRINCIPAL
   TEACHER
   ASSISTANT_TEACHER
   COUNSELOR
@@ -39,6 +27,7 @@ enum Role {
   EXAM_OFFICER
   FINANCE
   HR
+  RECEPTIONIST
   IT_SUPPORT
   TRANSPORT
   NURSE
@@ -47,12 +36,28 @@ enum Role {
   SECURITY
   MAINTENANCE
   STUDENT
-  USER
-}
   CLASS_REP
   PARENT
   ALUMNI
   AUDITOR
   INSPECTOR
   GUEST
+}
+
+// ==========================================
+// User Model — linked to Role enum
+// ==========================================
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  firstName   String
+  lastName    String
+  role        Role     @default(STUDENT)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  school      School?  @relation(fields: [schoolId], references: [id])
+  schoolId    String?
+
+
 }
