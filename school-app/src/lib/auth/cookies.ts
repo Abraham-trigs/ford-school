@@ -1,23 +1,9 @@
 "use server";
 
 import { cookies } from "next/headers";
-import {
-  signAccessToken,
-  signRefreshToken,
-  verifyAccessToken,
-  verifyRefreshToken,
-} from "./jwt";
+import { signRefreshToken, verifyRefreshToken, JWTPayload } from "./jwt";
 
-export interface JWTPayload {
-  id: string;
-  email: string;
-  role: string;
-  name?: string;
-  schoolId?: string | null;
-}
-
-const ACCESS_COOKIE = "access_token";
-const REFRESH_COOKIE = "formless_refresh_token";
+const COOKIE_NAME = "formless_refresh_token";
 
 // ------------------------
 // Get user from access token (for SSR + middleware)
@@ -28,7 +14,8 @@ export async function getUserFromCookie(): Promise<JWTPayload | null> {
   if (!token) return null;
 
   try {
-    const user = verifyAccessToken(token) as JWTPayload;
+    // Returns { userId, role }
+    const user = verifyRefreshToken(token);
     return user;
   } catch (err) {
     console.error("❌ Invalid or expired access token:", err);

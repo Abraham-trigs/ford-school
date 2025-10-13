@@ -1,29 +1,46 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
-  getUserFromRefresh,
-  rotateTokens,
-  clearAuthCookies,
-} from "@/lib/auth/cookies";
+  verifyRefreshToken,
+  signAccessToken,
+  rotateRefreshToken,
+} from "@/lib/auth/jwt";
 
-export async function POST() {
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get("refreshToken")?.value;
+  if (!token) {
+    return NextResponse.json({ message: "No refresh token" }, { status: 401 });
+  }
+
   try {
-    const user = await getUserFromRefresh();
-    if (!user) {
-      clearAuthCookies();
-      return NextResponse.json({ error: "Invalid or expired session" }, { status: 401 });
-    }
+    const decoded = verifyRefreshToken(token);
 
-    const { accessToken, refreshToken } = await rotateTokens(user);
-
-    return NextResponse.json({
-      message: "Tokens refreshed successfully",
-      accessToken,
-      refreshToken,
-      user,
+    // Issue new access token
+    const newAccessToken = signAccessToken({
+      userId: decoded.userId,
+      role: decoded.role,
     });
-  } catch (error) {
-    console.error("Refresh error:", error);
-    clearAuthCookies();
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Rotate refresh token
+    const newRefreshToken = rotateRefreshToken(token);
+
+    const res = NextResponse.json({
+      accessToken: newAccessToken,
+      userId: decoded.userId,
+    });
+
+    res.cookies.set("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      path: "/",
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    return res;
+  } catch {
+    return NextResponse.json(
+      { message: "Invalid or expired refresh token" },
+      { status: 401 }
+    );
   }
 }

@@ -19,10 +19,40 @@ model User {
   updatedAt   DateTime @updatedAt
 }
 
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     // no default
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum Role {
   SUPERADMIN
   ADMIN
   TEACHER
+  ASSISTANT_TEACHER
+  COUNSELOR
+  LIBRARIAN
+  EXAM_OFFICER
+  FINANCE
+  HR
+  IT_SUPPORT
+  TRANSPORT
+  NURSE
+  COOK
+  CLEANER
+  SECURITY
+  MAINTENANCE
   STUDENT
   USER
+}
+  CLASS_REP
+  PARENT
+  ALUMNI
+  AUDITOR
+  INSPECTOR
+  GUEST
 }

@@ -5,39 +5,31 @@ import { rotateTokens, clearAuthCookies } from "@/lib/auth/cookies";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
-    }
+    const body = await req.json();
+    const parsed = loginSchema.parse(body);
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
+    // only email and password now
+    const { user, accessToken, refreshToken } = await loginUser(
+      parsed.email,
+      parsed.password
+    );
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
+    const res = NextResponse.json({ user, accessToken });
 
-    const payload = {
-      userId: user.id,
-      role: user.role,
-      schoolId: user.schoolId,
-    };
-
-    // Rotate and set cookies
-    const { accessToken, refreshToken } = await rotateTokens(payload);
-
-    return NextResponse.json({
-      message: "Login successful",
-      accessToken,
-      refreshToken,
-      user: { id: user.id, email: user.email, role: user.role },
+    res.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      path: "/",
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
     });
-  } catch (error) {
-    console.error("Login error:", error);
-    clearAuthCookies();
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+
+    return res;
+  } catch (err: any) {
+    console.error("LOGIN ERROR:", err);
+    return NextResponse.json(
+      { message: err.message || "Login failed" },
+      { status: 400 }
+    );
   }
 }

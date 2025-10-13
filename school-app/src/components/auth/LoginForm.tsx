@@ -26,16 +26,17 @@ export default function LoginForm() {
     try {
       const res = await axios.post(
         "/api/auth/login",
-        { email, password },
-        { withCredentials: true }
+        { email, password }, // removed schoolId
+        { withCredentials: true } // keeps refresh token cookie
       );
 
-      const user = res.data.user;
-      setPendingUser(user);
+      // store user in Zustand
+      setUser(res.data.user);
 
-      // Only show modal if user is NOT Super Admin
-      if (user.role !== "SUPER_ADMIN") {
-        setShowModal(true);
+      // simple role-based redirect
+      const role = res.data.user.role;
+      if (role === "ADMIN" || role === "PRINCIPAL") {
+        router.push("/dashboard/admin");
       } else {
         // Directly set Super Admin and redirect
         setUser(user);
